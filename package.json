@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "test": "node --test test/",
+    "lint": "node scripts/lint-skills.mjs",
     "install-pstack": "node scripts/install.mjs"
   }
 }

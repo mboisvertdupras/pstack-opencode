@@ -72,14 +72,14 @@ export function lint(files, exists = existsSync) {
   })
 }
 
-function walk(path) {
+export function walk(path) {
   if (!statSync(path).isDirectory()) return [path]
   return readdirSync(path).flatMap((name) => (name === ".DS_Store" || name === "node_modules" ? [] : walk(join(path, name))))
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const roots = process.argv.slice(2)
-  const paths = (roots.length > 0 ? roots : ["src/skills"]).flatMap(walk)
+  const paths = (roots.length > 0 ? roots : ["src/skills", "src/agents"]).flatMap(walk)
   const findings = lint(paths.map((path) => ({ file: relative(process.cwd(), path), text: readFileSync(path, "utf8") })))
   for (const { file, line, rule, text } of findings) console.log(`${file}:${line} ${rule} ${text}`)
   console.log(`findings=${findings.length} files=${new Set(findings.map(({ file }) => file)).size}`)
