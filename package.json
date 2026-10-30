@@ -1,0 +1,14 @@
+{
+  "name": "pstack-opencode",
+  "private": true,
+  "type": "module",
+  "description": "pstack for OpenCode, generated from cursor/plugins and built on OpenCode primitives.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "update-upstream": "node scripts/build.mjs --update",
+    "test": "node --test test/",
+    "install-pstack": "node scripts/install.mjs"
+  }
+}
