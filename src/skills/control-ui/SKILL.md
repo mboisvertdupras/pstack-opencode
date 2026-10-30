@@ -5,7 +5,11 @@ description: Build or adapt a local browser/CDP harness to drive and inspect a w
 
 # Control UI
 
-Use local browser automation to verify UI behavior with evidence. First reuse the repo's own Playwright, browser, or Electron harness if it exists; otherwise assemble a temporary local harness around the app's dev server or Chromium debug port.
+Use local browser automation to verify UI behavior with evidence. First reuse the repo's own Playwright, browser, or Electron harness if it exists. Next, use a browser you can already drive. Only then assemble a temporary local harness around the app's dev server or Chromium debug port.
+
+## Browser You Can Already Drive
+
+Before you build a harness, check the tools inside `execute`. The `browser` namespace opens tabs, acts on pages, reads console and network logs, and takes screenshots. A browser MCP such as `chrome-devtools` does the same over CDP. Call `search` inside `execute` to find their exact tool paths, and load the `browser` skill first when the catalog lists one. Use one when it can reach the app's URL or debug port. Build a harness when neither exists or neither can reach the surface under test.
 
 ## What It Is Used For
 
@@ -13,7 +17,7 @@ Use local browser automation to verify UI behavior with evidence. First reuse th
 - Verifying visual or accessibility changes with screenshots and snapshots.
 - Checking local web, IDE, or Electron behavior before shipping.
 - Capturing console logs, network logs, CPU profiles, traces, or heap snapshots.
-- Creating before/after evidence for `verify-this`.
+- Creating before/after evidence that a fix works.
 
 ## Setup Pattern
 
