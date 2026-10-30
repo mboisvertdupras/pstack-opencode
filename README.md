@@ -1,83 +1,84 @@
 # pstack for OpenCode
 
-[pstack](https://github.com/cursor/plugins/tree/main/pstack) is poteto's set of rigorous engineering skills for Cursor. This repo runs it in OpenCode V2 on OpenCode's own primitives. The skills, playbooks, and principles are upstream's, unchanged. What changes is the machinery around them: agents, commands, modes, models, and loops map to the OpenCode feature that does the same job.
+pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `how` to explain code, `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 60 skills in `src/skills` include the `principle-*` skills that the playbooks cite. The three agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, and the `comment-sicko` comment reviewer.
 
-It also bundles `deslop`, `control-cli`, and `control-ui` from `cursor-team-kit`, which `/poteto-mode` routes to.
+pstack was ported from poteto's [pstack in cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack), which is MIT licensed, and that license still ships.
 
 ## Install
+
+Run the installer from this repo. It links `src/` and copies nothing.
 
 ```sh
 npm run install-pstack                         # every project, under ~/.config/opencode
 npm run install-pstack -- --project ~/code/app # one project, under its .opencode/
 ```
 
-The installer links two things and copies nothing. The plugin directory goes to `plugins/pstack`, and the three agents go to `agents/`. Rerunning it is safe. It never overwrites a file it did not create. `--uninstall` removes only its own links, and `--dry-run` shows what it would do.
+The installer links `src/` to `plugins/pstack` and each file in `src/agents` to `agents/`. Rerunning it is safe. It never replaces a file or link it did not create. If an earlier install linked into this repo's `dist/` folder, the installer moves that link to `src/` and prints `moved`. Add `--dry-run` to print what it would do without changing anything.
 
-Then do the two things the installer prints:
+To uninstall, run `npm run install-pstack -- --uninstall`. It removes only links into this repo's `src/` or the old `dist/`, and it keeps everything else.
 
-1. Add `"todo": true` and `"subagent_depth": 2` under `experimental` in your OpenCode config. The first gives agents `todowrite`, the todo list every playbook opens. The second lets a delegate run skills that spawn their own subagents, such as `/no-comments` calling `/how`.
-2. Run `/setup-pstack` once to pick a model per role.
+## Configure OpenCode
 
-## Use
+pstack needs two settings under `experimental` in `opencode.jsonc`. The installer prints the ones you are missing.
 
-Same as upstream. Start rigorous work with `/poteto-mode <task>`, and the other skills run as its steps need them. Every pstack skill has a slash command of the same name, such as `/how`, `/why`, `/interrogate`, and `/deslop`.
+```jsonc
+{
+	"experimental": {
+		"todo": true,
+		"subagent_depth": 2
+	}
+}
+```
 
-To keep the mode on across turns, press Tab to the `poteto-mode` agent, or start with `opencode --agent poteto-mode`. That replaces Cursor's Custom Mode.
+`todo` gives agents `todowrite`, which every playbook uses for its todo list. `subagent_depth` lets a delegate run a skill that spawns its own subagents, such as `/no-comments` calling `/how`.
 
-For overnight runs, give OpenCode's built-in `/goal` a check that can pass or fail. That replaces Cursor's `/loop`.
+Then run `/setup-pstack` once. It finds the models you have and writes a model per role to `~/.config/opencode/pstack-models.md`.
 
-## How it maps to OpenCode
+## Use pstack
 
-| pstack in Cursor | pstack in OpenCode |
-| --- | --- |
-| Plugin with `skills/` and `agents/` | A server plugin that registers the skills and commands, plus three Markdown agents |
-| `/name` attaches a skill to one message | A plugin command that attaches the skill through the prompt's `skills` field |
-| Custom Mode (Option+Enter) | The `poteto-mode` primary agent. The plugin attaches the skill to its first message and keeps a `pstack-mode` session instruction entry, which survives compaction. |
-| `~/.cursor/rules/pstack-models.mdc`, an always-applied rule | `~/.config/opencode/pstack-models.md`, kept in every session as the `pstack-models` instruction entry |
-| `Task` with `subagent_type`, `readonly`, `resume`, `run_in_background` | `subagent` with `agent`, `explore`, `sessionID`, `background` |
-| Model slugs such as `claude-opus-5-5-xhigh` | `<provider>/claude-opus-5-5#xhigh`. Effort is the model variant. |
-| `environment: "cloud"` | A git worktree from `worktree_create` |
-| `AskQuestion`, todo list | `question`, `todowrite` |
-| `/loop` | `/goal`, or a background `sleep` for a fixed cadence |
-| `agent-transcripts/` | `opencode session list` and `opencode session export` |
+To work in the mode for one message, start with `/poteto-mode <task>`. The other skills run as its steps need them.
 
-The full table lives in [`src/adapter.md`](src/adapter.md). Every pstack skill that uses a Cursor name gets one added line telling the agent to read it once per session. That is the same mechanism upstream uses for Claude Code.
+To keep the mode on for a whole session, press Tab to the `poteto-mode` agent, or start with `opencode --agent poteto-mode`.
 
-Session instruction entries carry the mode and the model roles because every provider receives them. That includes `claude-agent`, which ignores system text that plugin hooks add.
+Every skill except the `principle-*` skills has a slash command of the same name, such as `/how`, `/why`, `/interrogate`, and `/deslop`.
 
-A user skill with the same ID as a pstack skill keeps that ID. Today that is `tdd` and `teach` if you have them in `~/.agents/skills`. pstack then reads its own copy by path, and its `/tdd` and `/teach` commands do too.
+For a long run you leave alone, give OpenCode's `/goal` a check that can pass or fail, such as `/goal npm test passes`.
 
-Cursor Automations, Bugbot setup, and cloud agents have no OpenCode equivalent. A step that needs one is skipped with a one-line note. `make-bot-ui` is Automations-only.
+A user skill with the same ID as a pstack skill keeps that ID in OpenCode. pstack still reads its own copy by path, and its slash command of that name does too. The installer lists any such skills it finds.
 
 ## Layout
 
 ```text
-src/adapter.md          Cursor names to OpenCode primitives (dist/docs/harness/opencode.md)
-src/agents/             poteto-agent and the poteto-mode primary agent
-src/plugin/             The OpenCode plugin. lib.js is pure, index.js is the boundary.
-src/pins.json           Hashes of the upstream files src/ adapts
-scripts/build.mjs       Upstream checkout to dist/, with --check, --update, --repin
-scripts/install.mjs     Links dist/ into OpenCode
-test/                   Plugin behavior against a fake OpenCode context
-upstream.json           The pinned cursor/plugins commit
-dist/                   Generated. Never edit by hand.
+src/                     The plugin. The installer links this folder.
+src/plugin/              Registers the skills and commands. lib.js is pure, index.js talks to OpenCode.
+src/skills/              One folder per skill, each with a SKILL.md
+src/agents/              poteto-mode, poteto-agent, and comment-sicko
+src/LICENSE*             The pstack and cursor-team-kit MIT notices
+scripts/install.mjs      Links src/ into OpenCode, and uninstalls
+scripts/lint-skills.mjs  Checks skills and agents for product names, Cursor-only tool names, broken links, and bad frontmatter
+test/                    Plugin, installer, and lint tests. skills.test.mjs lints everything in src/.
+.opencode/skills/verify-pstack/  Repo-local skill that drives src/ in a real OpenCode server
 ```
 
-## Update from upstream
+## Change a skill
 
-```sh
-npm run update-upstream   # move the pin to cursor/plugins main and rebuild
-npm test
-```
+1. Edit the skill under `src/skills/<id>/`. Skills name no product. Write "the `subagent` tool", not the product that provides it. The lint fails on names such as `Cursor` or `OpenCode` in skill text.
+2. Run the tests. `npm test` includes the lint, and `npm run lint` runs the lint alone.
 
-The build fails loudly in three cases:
+	```sh
+	npm test
+	npm run lint
+	```
 
-- An upstream file that `src/` adapts by hand has changed. The message names the `git diff` to review. Update `src/`, then run `node scripts/build.mjs --repin`.
-- A skill starts using a Cursor name the adapter has no row for.
-- A skill's frontmatter no longer parses, or a link in authored text points outside the tree.
+3. Verify the change in a real server with the `verify-pstack` skill in this repo. Its harness starts a private OpenCode server with `src/` installed, drives commands and agents, and saves evidence.
 
-`npm run check` fails when `dist/` is stale.
+	```sh
+	H=.opencode/skills/verify-pstack/scripts/harness.mjs
+	$H up && $H doctor
+	$H command how "how does math.js work?"
+	$H down
+	```
 
 ## License
 
-MIT. pstack is by Lauren Tan, and `cursor-team-kit` is by Cursor. Their licenses ship in `dist/LICENSE` and `dist/LICENSE-cursor-team-kit`.
+MIT. See `LICENSE`. pstack is by Lauren Tan, and `cursor-team-kit`, the source of `deslop`, `control-cli`, and `control-ui`, is by Cursor. Their notices ship as `src/LICENSE` and `src/LICENSE-cursor-team-kit`.
