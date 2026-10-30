@@ -1,10 +1,11 @@
 # Installer
 
-`npm run install-pstack` links `src/` into OpenCode as the `pstack` plugin and links the three agents. It copies nothing, is safe to rerun, refuses to overwrite a file it did not create, and `--uninstall` removes only its own links. `--project <dir>` installs into that project's `.opencode/` instead.
+`npm run install-pstack` links `src/` into OpenCode as the `pstack` plugin and links the three agents. It copies nothing, is safe to rerun, refuses to overwrite a file it did not create, and `--uninstall` removes only its own links. A link from an earlier install that points into this repo's old `dist/` counts as its own and moves to `src/`. `--project <dir>` installs into that project's `.opencode/` instead.
 
 ## Sub-features
 
 - `install-link` links `plugins/pstack` and the three agent files.
+- `install-migrate` repoints links into the old `dist/` at `src/` and prints `moved`.
 - `install-rerun` reports `ok` for links that already point at this `src/`.
 - `install-refuse` fails on an existing file that is not its link.
 - `install-uninstall` removes its links and keeps anything else.
@@ -26,6 +27,7 @@ Preconditions:
 - **Link.** Run `XDG_CONFIG_HOME=$C node scripts/install.mjs`. It prints four `linked` lines, and `ls -l $C/opencode/plugins $C/opencode/agents` shows symlinks into `src/`.
 - **Advice.** The same output lists `"todo": true` and `"subagent_depth": 2` and the `/setup-pstack` step.
 - **Rerun.** Run it again. It prints four `ok` lines.
+- **Migrate.** Run the uninstall, then `ln -s $PWD/dist $C/opencode/plugins/pstack` and `ln -s $PWD/dist/agents/poteto-mode.md $C/opencode/agents/poteto-mode.md`. Install with `--dry-run`. It prints `moved` for both and changes nothing. Install again without it. It prints two `moved` and two `linked` lines, and both links now point into `src/`.
 - **Refuse.** Run `XDG_CONFIG_HOME=$C node scripts/install.mjs --uninstall`, then `mkdir -p $C/opencode/agents && echo mine > $C/opencode/agents/poteto-agent.md`, then install again. It prints a `FAIL` line for that file and exits `1`. `cat` shows `mine` unchanged.
 - **Uninstall.** Run the uninstall again. It prints `keep` for `poteto-agent.md` and removes nothing else. Remove `$C` afterward.
 

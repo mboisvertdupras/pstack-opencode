@@ -2,10 +2,11 @@
 
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, symlinkSync, unlinkSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join, resolve } from "node:path"
+import { dirname, join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src")
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..")
+const SRC = join(REPO, "src")
 const args = process.argv.slice(2)
 const flag = (name) => args.includes(name)
 const projectIndex = args.indexOf("--project")
@@ -19,23 +20,29 @@ const links = [
   ...readdirSync(join(SRC, "agents")).map((name) => ({ at: join(target, "agents", name), to: join(SRC, "agents", name) })),
 ]
 
-const owned = (path) => {
+const REMOVED_DIST = "dist"
+const ownedFolders = [...new Set([REPO, realpathSync(REPO)])].flatMap((root) => [join(root, "src"), join(root, REMOVED_DIST)])
+const linkTextPointsIntoOwnedFolder = (points) => ownedFolders.some((folder) => points === folder || points.startsWith(folder + sep))
+
+function linkState(at, to) {
+  let stat
   try {
-    return lstatSync(path).isSymbolicLink() && realpathSync(path).startsWith(realpathSync(SRC))
+    stat = lstatSync(at)
   } catch {
-    return false
+    return "missing"
   }
+  if (!stat.isSymbolicLink()) return "foreign"
+  const points = resolve(dirname(at), readlinkSync(at))
+  if (points === to) return "current"
+  return linkTextPointsIntoOwnedFolder(points) ? "moved" : "foreign"
 }
 
 const problems = []
 for (const { at, to } of links) {
-  let stat
-  try {
-    stat = lstatSync(at)
-  } catch {}
+  const state = linkState(at, to)
   if (flag("--uninstall")) {
-    if (!stat) continue
-    if (!owned(at)) {
+    if (state === "missing") continue
+    if (state === "foreign") {
       console.log(`keep    ${at} (not a pstack link)`)
       continue
     }
@@ -43,19 +50,20 @@ for (const { at, to } of links) {
     console.log(`removed ${at}`)
     continue
   }
-  if (stat?.isSymbolicLink() && resolve(dirname(at), readlinkSync(at)) === to) {
+  if (state === "current") {
     console.log(`ok      ${at}`)
     continue
   }
-  if (stat) {
+  if (state === "foreign") {
     problems.push(`${at} already exists and is not this pstack's link. Move it aside, then rerun.`)
     continue
   }
   if (!dryRun) {
     mkdirSync(dirname(at), { recursive: true })
+    if (state === "moved") unlinkSync(at)
     symlinkSync(to, at)
   }
-  console.log(`linked  ${at} -> ${to}`)
+  console.log(`${state === "moved" ? "moved " : "linked"}  ${at} -> ${to}`)
 }
 for (const problem of problems) console.log(`FAIL ${problem}`)
 if (problems.length > 0) process.exit(1)
