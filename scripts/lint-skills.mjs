@@ -20,6 +20,7 @@ const RULES = [
   { rule: "vocab", scope: "markdown", pattern: /\btodolist\b|\.mdc\b|(?<![\w/.])\/loop\b|\bagent-transcripts\b/g },
   { rule: "vocab", scope: "markdown", pattern: /\b[Cc]ustom [Mm]ode\b|\bcreate-skill\b|\bupdate_state\b|\bSendToUser\b|\bAutomations\b/g },
   { rule: "vocab", scope: "markdown", pattern: /\b(?:claude|grok|gpt|gemini|composer)-[\w.-]*?-(?:max|xhigh|high|medium|low|fast)(?:-fast)?\b/g },
+  { rule: "vocab", scope: "markdown", pattern: /\bfast (?:mode|speed|slug|variant)\b|\bstandard speed\b|\bfast or standard\b|\balwaysApply\b|\bUse as Mode\b|[Oo]ption\+[Ee]nter|\bcursor-grok\b|\bcloud agents?\b|\breadonly (?:judge|agent|subagent|mode|reviewer|explorer)s?\b|readonly\/Ask\b/g },
 ]
 
 const isMarkdown = (file) => file.endsWith(".md")
