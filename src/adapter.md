@@ -41,6 +41,7 @@ OpenCode names a model `<provider>/<model>#<variant>`. The variant is the reason
 | `auto` or `inherit-parent` | Omit `model`. |
 | The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | `~/.config/opencode/pstack-models.md`. The pstack plugin adds it to every session as the `pstack-models` instruction entry, so its role lines are already in context. If they are not, read the file. If the file or the role's line is missing, map the skill's default slug with the rows above. |
 | A role value `<provider>/<model>#<effort>` | Pass it as `model` unchanged. |
+| A code playbook line (`feature, refactoring`, `bug-fix`, `perf-issue`, or `hillclimb`) with a comma-separated list | A ladder, cheapest model first. Each code delegate starts on the first entry and moves one entry later for each of these it meets, stopping at the last entry. The change spans more than one module or alters an interface other code calls. The brief cannot name the data shape and the check that proves the change. A delegate on the same task already failed review or verification. A change that meets the `hardest tasks` bar takes that line instead. Then set effort per the Subagents section of poteto-mode, within the chosen entry's family. Name the chosen entry and the conditions it met in your reply. |
 | A rejected model | The `subagent` call fails. Apply the calling skill's fallback with the rows above, and never pass the rejected value again. |
 
 ## setup-pstack
@@ -49,6 +50,7 @@ The pstack plugin reads `~/.config/opencode/pstack-models.md` before each reques
 
 - Detect. Page through `tools.opencode.models({ limit: 100, offset })` inside `execute` until `next` is null. Each model contributes one value per variant, written `<provider>/<model>#<variant>`, such as `anthropic/claude-opus-5-5#xhigh`. A model with no variants is written without `#`. The variant is the effort token, so the budget step works as written.
 - Defaults. Map each default slug with the Models rows. `claude-opus-5-5-xhigh` becomes the listed `claude-opus-5-5` at `#xhigh`, and `grok-4.7-xhigh-fast` becomes the listed `grok-4.7` at `#xhigh`. When no provider lists a default's family, write `inherit-parent` for that role and say so.
+- Lists. A code playbook line can hold a comma-separated list, cheapest model first, read as the ladder in Models. Offer it when showing those roles, and keep a list the user set on a re-run.
 - Write. Write `~/.config/opencode/pstack-models.md` with no frontmatter, then the comment lines, the `# budget` line, and one line per role from step 5. Overwrite the whole file. Never put the role lines in `AGENTS.md` or in OpenCode config.
 - Confirm. The plugin picks up the file at the next request in every open session, so new sessions are not required.
 
