@@ -11,9 +11,9 @@ Write `~/.config/opencode/pstack-models.md`, the file that sets pstack's model p
 
 ### 1. Detect available models
 
-Inside `execute`, page through `tools.opencode.models({ limit: 100, offset })`, starting at `offset: 0` and passing the returned `next` until it is `null`. Each model's `id` is `<provider>/<model>`, and each entry in its `variants` contributes one value, `<provider>/<model>#<variant>`. A model with no variants contributes its bare `id`. The set of those values is the detected set, and each value is a value you can pass as a `subagent` call's `model`. If the call fails or lists nothing, ask the user to paste the values they have access to. Never write a real value you have not confirmed is available.
+Inside `execute`, page through `tools.opencode.models({ limit: 100, offset })`, starting at `offset: 0` and passing the returned `next` until it is `null`. Each model's `id` is `<provider>/<model>`, and each entry in its `variants` contributes one value, `<provider>/<model>#<variant>`. A model with no variants contributes its bare `id`. The set of those values is the detected set, and each is a value you can pass as a `subagent` call's `model`. If the call fails or lists nothing, ask the user to paste the values they have access to. Never write a real value you have not confirmed is available.
 
-Map each default family to a detected model by its `id` or `name`. `claude-opus-5-5` is Opus 5.5, and `grok-4.7` is Grok 4.7. When more than one provider lists a family, prefer the provider of the current session's model. When no provider lists a family, write `inherit-parent` for every role that defaults to it, and tell the user which roles fell back and why. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs.
+Map each default family to a detected model by its `id` or `name`. `claude-opus-5-5` is Opus 5.5, and `grok-4.7` is Grok 4.7. When more than one provider lists a family, prefer the provider of the current session's model. When no provider lists a family, write `inherit-parent` for every role that defaults to it, and tell the user which roles fell back and why. The aliases `inherit-parent` and `auto` are always valid even though they are not detected values.
 
 ### 2. Load current state
 
