@@ -69,8 +69,7 @@ elif raw=$(gh pr list --author "@me" --state all --limit 1000 \
 fi
 [ -s "$prs" ] || echo "[]" > "$prs"
 
-# Sessions as "<updated-seconds>\t<resolved-directory>", fetched once. Session
-# directories are resolved so /tmp matches git's /private/tmp on macOS.
+# Session directories are resolved so /tmp matches git's /private/tmp on macOS.
 sessions=$(mktemp)
 if command -v opencode >/dev/null 2>&1; then
 	opencode session list --format json --max-count 1000 2>/dev/null \
@@ -79,6 +78,9 @@ if command -v opencode >/dev/null 2>&1; then
 			printf '%s\t%s\n' "$ts" "$(cd "$dir" 2>/dev/null && pwd -P || printf '%s' "$dir")"
 		done > "$sessions"
 fi
+last_session_ts() {
+	awk -F'\t' -v w="$1" '$2 == w || index($2, w "/") == 1 {print $1}' "$sessions" | sort -rn | head -1
+}
 now=$(date +%s)
 
 echo "# base: $base"
@@ -115,11 +117,9 @@ git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt;
 		'.[] | select(.head==$b) | "#\(.number)/\(.state)"' "$prs" 2>/dev/null | head -1)
 	[ -z "$pr" ] && pr="-"
 
-	# Most recent session whose directory is this worktree or inside it. Match
-	# the path exactly or followed by "/" so glint-482 does not match glint-482-r37.
-	last="-"; last_ts=0
-	f=$(awk -F'\t' -v w="$wt" '$2 == w || index($2, w "/") == 1 {print $1}' "$sessions" | sort -rn | head -1)
-	if [ -n "$f" ]; then last_ts=$f; last=$(fmt_day "$last_ts" 2>/dev/null); fi
+	last="-"
+	last_ts=$(last_session_ts "$wt")
+	if [ -n "$last_ts" ]; then last=$(fmt_day "$last_ts" 2>/dev/null); else last_ts=0; fi
 	recent=$([ "$last_ts" -gt 0 ] 2>/dev/null && [ $(( (now - last_ts) / 86400 )) -le 4 ] && echo yes || echo no)
 
 	case "$dirty" in wip:*) bucket=hold-wip ;; *)
