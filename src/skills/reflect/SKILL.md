@@ -12,35 +12,36 @@ Invoke when the user says "reflect" or "/reflect". Skip when the conversation is
 
 ## 1. Locate the active transcript
 
-Before fanning out, find this conversation's transcript in the `agent-transcripts/` directory the system prompt names. Do not glob across `~/.cursor/projects/*/`. That crosses workspace boundaries and reads private chats from unrelated projects.
+Before fanning out, find this conversation's session and export it to a file. Run the commands from the project directory. `opencode session list --format json` lists only this project's sessions, newest first. Do not read sessions from other projects. That crosses project boundaries and reads private chats from unrelated work.
 
 ```bash
-ls -t <agent-transcripts>/*.jsonl <agent-transcripts>/*/*.jsonl <agent-transcripts>/*/subagents/*.jsonl 2>/dev/null | head -10
+opencode session list --format json | head -40
+opencode session export <id> > /tmp/reflect-<id>.json
 ```
 
-That covers the legacy flat (`<id>.jsonl`), current nested (`<id>/<id>.jsonl`), and subagent (`<parent>/subagents/<child>.jsonl`) layouts. For each candidate, read the first JSONL line. Take the file whose `message.content[0].text` contains the conversation's opening user prompt. If none matches, pass a tight digest of the session instead.
+Try the newest candidates in order. Take the session whose first user message contains the conversation's opening user prompt. `opencode api session.list --param parentID=<id>` lists its subagent sessions, which export the same way. If none matches, pass a tight digest of the session instead.
 
 ## 2. Spawn three reviewers in parallel
 
-One message, three `subagent` calls, `agent: "general"`, agent mode (`readonly: false`). Reviewers need MCP access to look up the tickets, chat threads, and observability traces the transcript references, and readonly strips MCPs.
+One message, three `subagent` calls, `agent: "general"`. Reviewers need MCP access through `execute` to look up the tickets, chat threads, and observability traces the transcript references, and `explore` has no `execute`.
 
-Each reviewer and the synthesizer name a role line in the `pstack-models` instruction entry and a default. Set `model` to that line's value, or to the default if the rule or the line is missing. Leave `model` unset when the value is `auto` or `inherit-parent`. If the `subagent` tool rejects a slug, use the default and say so. If it rejects the default, use the closest valid slug of the same family from its error message. Pick each subagent's reasoning level for the job, per the Subagents section of the **poteto-mode** skill.
+Each reviewer and the synthesizer name a role line in the `pstack-models` instruction entry and a default. Set `model` to that line's value, or to the default if the entry or the line is missing. A default's `<provider>` is one that lists the model. If none does, omit `model` and say so. Leave `model` unset when the value is `auto` or `inherit-parent`. If the `subagent` tool rejects a value, use the default and say so. If it rejects the default, use the closest listed model of the same family (`opencode models`), or omit `model` so the child runs on the parent model, and say which. Pick each subagent's reasoning level for the job, per the Subagents section of the `poteto-mode` skill.
 
 | Lens | Role line | Default `model` | Prompt template |
 |---|---|---|---|
-| Judgment | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5#xhigh` | `references/judgment-reviewer.md` |
-| Tooling | `reflect tooling` | `grok-4.7#xhigh` | `references/tooling-reviewer.md` |
-| Divergent | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5#xhigh` | `references/divergent-reviewer.md` |
+| Judgment | `reflect judgment, divergent, synthesizer` | `<provider>/claude-opus-5-5#xhigh` | `references/judgment-reviewer.md` |
+| Tooling | `reflect tooling` | `<provider>/grok-4.7#xhigh` | `references/tooling-reviewer.md` |
+| Divergent | `reflect judgment, divergent, synthesizer` | `<provider>/claude-opus-5-5#xhigh` | `references/divergent-reviewer.md` |
 
-Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in the `subagent` response body.
+Pass each template verbatim, substituting the exported session path or digest where marked. Reviewers return findings in the `subagent` response body.
 
 ## 3. Synthesize
 
-One `subagent` call, `agent: "general"`, `model` from the `reflect judgment, divergent, synthesizer` line (default `claude-opus-5-5#xhigh`), agent mode (`readonly: false`). It spot-verifies citations through MCP, and readonly strips MCPs. Pass `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. It returns an Accepted / Rejected / Backlog list.
+One `subagent` call, `agent: "general"`, `model` from the `reflect judgment, divergent, synthesizer` line (default `<provider>/claude-opus-5-5#xhigh`). It spot-verifies citations through MCP inside `execute`, and `explore` has no `execute`. Pass `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. It returns an Accepted / Rejected / Backlog list.
 
 ## 4. Structural enforcement check
 
-Move any Accepted item that a lint rule, script, metadata flag, or runtime check would enforce more reliably to Backlog. See the **encode-lessons-in-structure** principle skill.
+Move any Accepted item that a lint rule, script, metadata flag, or runtime check would enforce more reliably to Backlog. See the `principle-encode-lessons-in-structure` skill.
 
 ## 5. Apply
 
@@ -48,14 +49,14 @@ Present the synthesizer's full Accepted / Rejected / Backlog output and wait for
 
 File each Backlog item to your team's devex or backlog tracker without waiting. Only the Accepted list waits for approval.
 
-Never edit a skill under `plugins/cache/`. Before approval, show its destination, `.opencode/skills/<skill>/` or `~/.config/opencode/skills/<skill>/`. After approval, copy the skill folder there and edit the copy. Never open a PR or push.
+Never edit a skill in this plugin's folder. Before approval, show its destination, `.opencode/skills/<skill>/` or `~/.config/opencode/skills/<skill>/`. After approval, copy the skill folder there and edit the copy. A copy with a pstack ID shadows pstack's, and the `skill` tool's base directory shows which one loaded. Never open a PR or push.
 
 Follow each approved row's Routing exactly:
 
 - Trivial existing-skill edit (a one-line bullet, a tightened sentence, a stale fact corrected): the parent does it directly.
-- Substantive existing-skill edit (a new section, a new pattern table, more than ~10 lines): hand to Cursor's built-in `create-skill` skill and run its draft / test / iterate loop.
-- `tune description: <skill path>` (the skill exists but didn't trigger when it should have): hand to `create-skill` and run its description-optimization loop.
-- `new skill via create-skill: <kebab-name>`: hand creation to `create-skill`. Do not invent the shape ad hoc.
+- Substantive existing-skill edit (a new section, a new pattern table, more than ~10 lines): hand to the `skill-creator` skill when the catalog lists one and run its draft / test / iterate loop. Otherwise the parent edits it by hand.
+- `tune description: <skill path>` (the skill exists but didn't trigger when it should have): hand to `skill-creator` when the catalog lists one and run its description-optimization loop. Otherwise the parent rewrites the description by hand.
+- `new skill: <kebab-name>`: hand creation to the `skill-creator` or `writing-for-agents` skill when the catalog lists one. Otherwise author `<kebab-name>/SKILL.md` by hand, with `name` and `description` frontmatter, per the [Authoring a skill playbook](../poteto-mode/playbooks/authoring-a-skill.md). Do not invent the shape ad hoc.
 
 If your environment ships a SKILL.md validator, run it on every touched skill before declaring done.
 
