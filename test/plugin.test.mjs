@@ -48,7 +48,7 @@ function fakeContext({ modelsFile, sessions = {}, registered = [] } = {}) {
   return { ctx, state }
 }
 
-test("registers every bundled skill, hidden unless upstream lets the model invoke it", async () => {
+test("registers every bundled skill, hidden unless its frontmatter lets the model invoke it", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
   const folders = readdirSync(join(SRC, "skills")).sort()

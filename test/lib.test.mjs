@@ -47,13 +47,13 @@ test("entry ops put changed values and remove values that are no longer wanted",
 test("skill content links to files on disk by absolute path, and leaves URLs, anchors, and missing targets alone", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "pstack-skills-")))
   mkdirSync(join(root, "skills", "how", "references"), { recursive: true })
-  mkdirSync(join(root, "docs"))
-  writeFileSync(join(root, "docs", "adapter.md"), "")
+  mkdirSync(join(root, "shared"))
+  writeFileSync(join(root, "shared", "glossary.md"), "")
   writeFileSync(join(root, "skills", "how", "references", "explorer.md"), "")
   const body = [
-    "Read [the adapter](../../docs/adapter.md) first.",
+    "Read [the glossary](../../shared/glossary.md) first.",
     "See [the explorer](references/explorer.md#prompt).",
-    "Visit [upstream](https://github.com/cursor/plugins) or [below](#usage).",
+    "Visit [the site](https://example.com/pstack) or [below](#usage).",
     "Skip [the gone file](references/missing.md).",
   ].join("\n")
   writeFileSync(join(root, "skills", "how", "SKILL.md"), `---\nname: how\ndescription: How.\n---\n\n${body}\n`)
@@ -61,9 +61,9 @@ test("skill content links to files on disk by absolute path, and leaves URLs, an
   assert.equal(
     skill.content,
     [
-      `Read [the adapter](${root}/docs/adapter.md) first.`,
+      `Read [the glossary](${root}/shared/glossary.md) first.`,
       `See [the explorer](${root}/skills/how/references/explorer.md#prompt).`,
-      "Visit [upstream](https://github.com/cursor/plugins) or [below](#usage).",
+      "Visit [the site](https://example.com/pstack) or [below](#usage).",
       "Skip [the gone file](references/missing.md).",
     ].join("\n") + "\n",
   )
