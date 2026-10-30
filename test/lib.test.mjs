@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { test } from "node:test"
-import { commandDescription, commandPrompt, entryOps, parseFrontmatter } from "../src/plugin/lib.js"
+import { commandDescription, commandPrompt, entryOps, parseFrontmatter, readSkills } from "../src/plugin/lib.js"
 
 test("frontmatter reads double-quoted, single-quoted, plain, and folded descriptions", () => {
   const quoted = parseFrontmatter('---\nname: how\ndescription: "Use for \\"how does X work\\"."\ndisable-model-invocation: true\n---\n\n# How\n')
@@ -39,4 +42,30 @@ test("entry ops put changed values and remove values that are no longer wanted",
     { key: "c", value: "3" },
   ])
   assert.deepEqual(entryOps({ a: undefined }, {}), [])
+})
+
+test("skill content links to files on disk by absolute path, and leaves URLs, anchors, and missing targets alone", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "pstack-skills-")))
+  mkdirSync(join(root, "skills", "how", "references"), { recursive: true })
+  mkdirSync(join(root, "docs"))
+  writeFileSync(join(root, "docs", "adapter.md"), "")
+  writeFileSync(join(root, "skills", "how", "references", "explorer.md"), "")
+  const body = [
+    "Read [the adapter](../../docs/adapter.md) first.",
+    "See [the explorer](references/explorer.md#prompt).",
+    "Visit [upstream](https://github.com/cursor/plugins) or [below](#usage).",
+    "Skip [the gone file](references/missing.md).",
+  ].join("\n")
+  writeFileSync(join(root, "skills", "how", "SKILL.md"), `---\nname: how\ndescription: How.\n---\n\n${body}\n`)
+  const [skill] = readSkills(join(root, "skills"))
+  assert.equal(
+    skill.content,
+    [
+      `Read [the adapter](${root}/docs/adapter.md) first.`,
+      `See [the explorer](${root}/skills/how/references/explorer.md#prompt).`,
+      "Visit [upstream](https://github.com/cursor/plugins) or [below](#usage).",
+      "Skip [the gone file](references/missing.md).",
+    ].join("\n") + "\n",
+  )
+  rmSync(root, { recursive: true, force: true })
 })

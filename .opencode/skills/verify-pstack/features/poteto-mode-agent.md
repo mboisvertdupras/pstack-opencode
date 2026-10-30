@@ -22,7 +22,7 @@ Preconditions:
 
 - `$H doctor` lists `poteto-mode=primary`.
 
-- **First message.** Run `$H run --agent poteto-mode "Task: add a subtract function to math.js. Do NOT do the task. Reply only with the playbook you matched and the path of the playbook file."`. The reply names the Feature playbook and `dist/skills/poteto-mode/playbooks/feature.md`. Carry the printed `<sid>`.
+- **First message.** Run `$H run --agent poteto-mode "Task: add a subtract function to math.js. Do NOT do the task. Reply only with the playbook you matched and the path of the playbook file."`. The reply names the Feature playbook and `src/skills/poteto-mode/playbooks/feature.md`. Carry the printed `<sid>`.
 - **Mechanism.** Run `$H export <sid>`. The first `user` line shows `skills=["poteto-mode"]`. Run `$H entries <sid>`. It lists `pstack-mode`, whose text starts `poteto mode is on`.
 - **Later message.** Run `$H run --agent poteto-mode --session <sid> "One word: are you still in poteto mode?"`. Then `$H export <sid>` shows `skills=[]` on the second `user` line.
 - **Switch away.** Run `$H run --agent build --session <sid> "Reply with only OK."`. Then `$H entries <sid>` no longer lists `pstack-mode`.

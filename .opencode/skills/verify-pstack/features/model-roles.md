@@ -8,7 +8,7 @@
 - `models-edit` replaces the entry text after the file changes.
 - `models-delete` removes the entry after the file is deleted.
 - `models-read` lets the agent answer a role's model from the entry.
-- `models-ladder` picks a code delegate's model from a list on a code playbook line, per the adapter's Models row.
+- `models-ladder` picks a code delegate's model from a list on a code playbook line, per the Subagents section of the poteto-mode skill.
 
 ## How to get to it (user POV)
 
@@ -25,7 +25,7 @@ Preconditions:
 - **Write.** Run `printf '# budget: small (medium)\nswarm workers: claude-agent/haiku#medium\n' > "$PSTACK_VERIFY_CONFIG/pstack-models.md"`. Then `$H run --session <sid> "Which model does the swarm workers role use? One line."`. The reply names `claude-agent/haiku#medium`, and `$H entries <sid>` shows `pstack-models` containing that line.
 - **Edit.** Change the line to `swarm workers: inherit-parent`, then `$H run --session <sid> "Reply with only OK."`. `$H entries <sid>` shows `inherit-parent`.
 - **Delete.** Run `rm "$PSTACK_VERIFY_CONFIG/pstack-models.md"` and `$H run --session <sid> "Reply with only OK."`. `$H entries <sid>` lists no `pstack-models`.
-- **Ladder.** Write `feature, refactoring: claude-agent/haiku#medium, claude-agent/sonnet#medium` to the file. Run `$H run --model claude-agent/opus` twice with the prompt "Read `<repo>/dist/docs/harness/opencode.md`. You are on step 4 of pstack's Feature playbook. Delegate the code change below to a poteto-agent subagent, choosing its model from the feature, refactoring line in your pstack-models context per the adapter. Skip every other playbook step. Task:" and a task. The task "add an exported subtract(a, b) next to add in math.js" gets a child on `haiku`. The task "move add into ops/add.js, add ops/subtract.js, and change math.js to re-export both, with add now taking an array of numbers" gets a child on `sonnet`. Take each child from `$H children <sid>`, run `$H export <child>`, and read `info.model` in the saved JSON. The reply's claim alone is not proof.
+- **Ladder.** Write `feature, refactoring: claude-agent/haiku#medium, claude-agent/sonnet#medium` to the file. Run `$H run --model claude-agent/opus` twice with the prompt "Load the poteto-mode skill. You are on step 4 of pstack's Feature playbook. Delegate the code change below to a poteto-agent subagent, choosing its model from the feature, refactoring line in your pstack-models context per the skill's Subagents section. Skip every other playbook step. Task:" and a task. The task "add an exported subtract(a, b) next to add in math.js" gets a child on `haiku`. The task "move add into ops/add.js, add ops/subtract.js, and change math.js to re-export both, with add now taking an array of numbers" gets a child on `sonnet`. Take each child from `$H children <sid>`, run `$H export <child>`, and read `info.model` in the saved JSON. The reply's claim alone is not proof.
 
 ## Gotchas
 

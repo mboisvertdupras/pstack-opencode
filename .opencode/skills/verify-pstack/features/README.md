@@ -4,7 +4,7 @@ This folder is the maintained source for verifying what a pstack user sees in Op
 
 ## Baseline preconditions
 
-- `npm run build` ran after the last change to `src/` or `scripts/`.
+- `$H up` ran after the last change to `src/` or `scripts/`.
 - `$H up` printed `ready`, and `$H doctor` reports every line `ok`.
 - The test project is the seeded git repo with one file, `math.js`, which exports `add`.
 - The test config has no `pstack-models.md` until a recipe writes one.

@@ -5,7 +5,7 @@ import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist")
+const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src")
 const args = process.argv.slice(2)
 const flag = (name) => args.includes(name)
 const projectIndex = args.indexOf("--project")
@@ -14,19 +14,14 @@ const configDir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config")
 const target = project ? join(project, ".opencode") : configDir
 const dryRun = flag("--dry-run")
 
-if (!existsSync(join(DIST, "plugin", "index.js"))) {
-  console.log("dist/ is missing. Run `npm run build` first.")
-  process.exit(1)
-}
-
 const links = [
-  { at: join(target, "plugins", "pstack"), to: DIST },
-  ...readdirSync(join(DIST, "agents")).map((name) => ({ at: join(target, "agents", name), to: join(DIST, "agents", name) })),
+  { at: join(target, "plugins", "pstack"), to: SRC },
+  ...readdirSync(join(SRC, "agents")).map((name) => ({ at: join(target, "agents", name), to: join(SRC, "agents", name) })),
 ]
 
 const owned = (path) => {
   try {
-    return lstatSync(path).isSymbolicLink() && realpathSync(path).startsWith(realpathSync(DIST))
+    return lstatSync(path).isSymbolicLink() && realpathSync(path).startsWith(realpathSync(SRC))
   } catch {
     return false
   }
@@ -73,7 +68,7 @@ const roots = [
   join(configDir, "skills"),
   ...(project ? [".claude", ".agents", ".opencode"].map((dir) => join(project, dir, "skills")) : []),
 ]
-const pstackSkills = new Set(readdirSync(join(DIST, "skills")))
+const pstackSkills = new Set(readdirSync(join(SRC, "skills")))
 const shadows = roots.flatMap((root) =>
   existsSync(root)
     ? readdirSync(root)

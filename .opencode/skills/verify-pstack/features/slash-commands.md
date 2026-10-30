@@ -23,7 +23,7 @@ Preconditions:
 - **Attach.** Run `$H command how "In one sentence, what does math.js export? Answer directly, no subagents."`. The `user` line shows `skills=["how"]` with the text unchanged, and the reply names `add`.
 - **Empty text.** Run `$H command bro`. The `user` line shows `skills=["bro"]` and text `"Run the bro skill."`.
 - **No principle commands.** Run `$H doctor`. The command line counts only non-principle skills. Then run `$H command principle-prove-it-works "x"`. It fails, because no such command exists.
-- **Shadowed ID.** Run `eval "$($H env)"`, then `mkdir -p "$PSTACK_VERIFY_CONFIG/skills/tdd"` and write a `SKILL.md` there with frontmatter `name: tdd` and `description: user tdd`. Run `$H skill tdd` until it resolves to that file. Run `$H command tdd "Reply with only OK."`. The `user` line shows `skills=[]`, and its text starts `Read the pstack \`tdd\` skill at` with the `dist/skills/tdd/SKILL.md` path. Remove the folder afterward.
+- **Shadowed ID.** Run `eval "$($H env)"`, then `mkdir -p "$PSTACK_VERIFY_CONFIG/skills/tdd"` and write a `SKILL.md` there with frontmatter `name: tdd` and `description: user tdd`. Run `$H skill tdd` until it resolves to that file. Run `$H command tdd "Reply with only OK."`. The `user` line shows `skills=[]`, and its text starts `Read the pstack \`tdd\` skill at` with the `src/skills/tdd/SKILL.md` path. Remove the folder afterward.
 
 ## Gotchas
 

@@ -1,11 +1,11 @@
 ---
 name: verify-pstack
-description: Drive the pstack OpenCode plugin in a real, isolated OpenCode server and prove a change to dist/ works the way a user sees it. Covers slash commands, the poteto-mode agent, /setup-pstack model roles, pstack subagents, and the installer. Use after changing src/, scripts/, or the upstream pin, or when asked to verify, smoke-test, or reproduce a pstack-in-OpenCode bug.
+description: Drive the pstack OpenCode plugin in a real, isolated OpenCode server and prove a change to src/ works the way a user sees it. Covers slash commands, the poteto-mode agent, /setup-pstack model roles, pstack subagents, and the installer. Use after changing src/ or scripts/, or when asked to verify, smoke-test, or reproduce a pstack-in-OpenCode bug.
 ---
 
 # Verify pstack in OpenCode
 
-pstack's user is a person typing in OpenCode. They run `/how`, switch to the `poteto-mode` agent, and let skills spawn `poteto-agent`. Unit tests in `test/` drive the plugin against a fake context. This skill drives the built `dist/` inside a real OpenCode server, with real models. Use it as the proof step for any change that ships.
+pstack's user is a person typing in OpenCode. They run `/how`, switch to the `poteto-mode` agent, and let skills spawn `poteto-agent`. Unit tests in `test/` drive the plugin against a fake context. This skill drives `src/` inside a real OpenCode server, with real models. Use it as the proof step for any change that ships.
 
 Every command below runs from the repo root. `H` is the harness.
 
@@ -15,10 +15,10 @@ H=.opencode/skills/verify-pstack/scripts/harness.mjs
 
 ## Launch
 
-1. Build first. The harness serves `dist/`, not `src/`.
+1. Run the unit tests first. The harness serves `src/` directly, with no build step.
 
    ```sh
-   npm run build && npm test
+   npm test
    ```
 
 2. Start a private server.
@@ -27,7 +27,7 @@ H=.opencode/skills/verify-pstack/scripts/harness.mjs
    $H up
    ```
 
-   It makes a run folder under `$TMPDIR/opencode/pstack-verify/run-*`, with its own OpenCode config folder and a seeded git project holding `math.js`. It installs pstack into that config with `scripts/install.mjs`, sets `experimental.todo` and `experimental.subagent_depth: 2`, and starts `opencode serve` on a free port. It prints `ready` only after every skill in `dist/skills` is registered at the project, which takes a few seconds after the port answers.
+   It makes a run folder under `$TMPDIR/opencode/pstack-verify/run-*`, with its own OpenCode config folder and a seeded git project holding `math.js`. It installs pstack into that config with `scripts/install.mjs`, sets `experimental.todo` and `experimental.subagent_depth: 2`, and starts `opencode serve` on a free port. It prints `ready` only after every skill in `src/skills` is registered at the project, which takes a few seconds after the port answers.
 
 3. Load the run's paths when a step needs them.
 
@@ -45,7 +45,7 @@ Run this first, and again whenever anything looks off. It is read-only.
 $H doctor
 ```
 
-It checks that the server this run started is alive, that `/api/info` answers, that every `dist/skills` skill is registered from `dist/`, that the three agents have the right modes, and that every non-principle skill has a command. Every line must read `ok`. A count short of the total means a user skill shadows a pstack ID. See Gotchas.
+It checks that the server this run started is alive, that `/api/info` answers, that every `src/skills` skill is registered from `src/`, that the three agents have the right modes, and that every non-principle skill has a command. Every line must read `ok`. A count short of the total means a user skill shadows a pstack ID. See Gotchas.
 
 ## Drive
 
@@ -95,6 +95,5 @@ To stop a run whose state is lost, find its `pid` in `$TMPDIR/opencode/pstack-ve
 - Sessions are written to the user's real OpenCode database. The server isolates config but not data, because isolating data drops the user's model credentials. `down` deletes this run's sessions. A session the harness filed elsewhere would survive it.
 - `opencode run` files its session under `$PWD`, not the process directory. The harness sets `PWD` to the test project. Never run `opencode run --server` by hand from the repo, or the session and every file it touches land in this repo.
 - User skills in `~/.claude/skills` and `~/.agents/skills` still load in the test server. One with a pstack ID replaces pstack's. `doctor` then reports fewer than the full count, and `up` times out. Check with `$H skill <id>`.
-- OpenCode caches the plugin module per server. After `npm run build`, run `$H down` and `$H up`. A running server keeps the old plugin.
+- OpenCode caches the plugin module and its skills per server. After a change to `src/`, run `$H down` and `$H up`. A running server keeps the old plugin.
 - `opencode api` output is cut at 64 KiB when piped. The harness writes it to a file first. Do the same in any one-off call.
-- `dist/` is generated. Fix the source in `src/` or `scripts/`, rebuild, then verify.

@@ -7,7 +7,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const REPO = realpathSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".."))
-const DIST = join(REPO, "dist")
+const SRC = join(REPO, "src")
 const BASE = join(existsSync(join(tmpdir(), "opencode")) ? join(tmpdir(), "opencode") : tmpdir(), "pstack-verify")
 const LATEST = join(BASE, "latest")
 const MODEL = process.env.PSTACK_VERIFY_MODEL ?? "claude-agent/haiku"
@@ -41,8 +41,8 @@ function api(state, args) {
 }
 
 const locationQuery = (state) => `location%5Bdirectory%5D=${encodeURIComponent(state.proj)}`
-const distSkills = () => readdirSync(join(DIST, "skills")).filter((name) => existsSync(join(DIST, "skills", name, "SKILL.md")))
-const pstackSkills = (state) => api(state, ["GET", `/api/skill?${locationQuery(state)}`]).filter((skill) => skill.path.startsWith(join(DIST, "skills")))
+const srcSkills = () => readdirSync(join(SRC, "skills")).filter((name) => existsSync(join(SRC, "skills", name, "SKILL.md")))
+const pstackSkills = (state) => api(state, ["GET", `/api/skill?${locationQuery(state)}`]).filter((skill) => skill.path.startsWith(join(SRC, "skills")))
 const evidencePath = (state, name) => join(state.evidence, name)
 
 function save(state, name, value) {
@@ -107,7 +107,6 @@ function flagValue(args, name, fallback) {
 
 const commands = {
   async up() {
-    if (!existsSync(join(DIST, "plugin", "index.js"))) die("dist/ is missing. Run `npm run build` in the repo first.")
     mkdirSync(BASE, { recursive: true })
     const runDir = realpathSync(mkdtempSync(join(BASE, "run-")))
     const config = join(runDir, "config")
@@ -146,7 +145,7 @@ const commands = {
     writeFileSync(join(runDir, "state.json"), JSON.stringify(state))
 
     // Ready means the plugin finished registering every skill at the project location, not that the port answers.
-    const want = distSkills().length
+    const want = srcSkills().length
     let have = 0
     for (let waited = 0; have < want; waited += 1000) {
       if (waited > 60_000) die(`only ${have} of ${want} pstack skills registered after 60s. Run \`harness.mjs doctor\`, then \`harness.mjs down\`.`)
@@ -173,12 +172,12 @@ const commands = {
       const info = api(state, ["GET", "/api/info"])
       check(Boolean(info), `server ${state.url} answers /api/info${info?.version ? ` (OpenCode ${info.version})` : ""}`)
       const skills = pstackSkills(state)
-      check(skills.length === distSkills().length, `${skills.length} of ${distSkills().length} pstack skills registered from ${join(DIST, "skills")}`)
+      check(skills.length === srcSkills().length, `${skills.length} of ${srcSkills().length} pstack skills registered from ${join(SRC, "skills")}`)
       const agents = api(state, ["GET", `/api/agent?${locationQuery(state)}`])
       const modes = Object.fromEntries(agents.map((agent) => [agent.id, agent.mode]))
       check(modes["poteto-mode"] === "primary" && modes["poteto-agent"] === "subagent" && modes["comment-sicko"] === "subagent", `agents poteto-mode=${modes["poteto-mode"]} poteto-agent=${modes["poteto-agent"]} comment-sicko=${modes["comment-sicko"]}`)
       const names = new Set(api(state, ["GET", `/api/command?${locationQuery(state)}`]).map((command) => command.name))
-      const expected = distSkills().filter((name) => !name.startsWith("principle-"))
+      const expected = srcSkills().filter((name) => !name.startsWith("principle-"))
       const missing = expected.filter((name) => !names.has(name))
       check(missing.length === 0, `${expected.length - missing.length} of ${expected.length} pstack commands registered${missing.length ? `, missing ${missing.join(", ")}` : ""}`)
     }

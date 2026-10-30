@@ -3,9 +3,9 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import plugin from "../dist/plugin/index.js"
+import plugin from "../src/plugin/index.js"
 
-const DIST = join(import.meta.dirname, "..", "dist")
+const SRC = join(import.meta.dirname, "..", "src")
 
 // A fake OpenCode plugin context that records what the plugin registers and what it sends.
 function fakeContext({ modelsFile, sessions = {}, registered = [] } = {}) {
@@ -51,7 +51,7 @@ function fakeContext({ modelsFile, sessions = {}, registered = [] } = {}) {
 test("registers every bundled skill, hidden unless upstream lets the model invoke it", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
-  const folders = readdirSync(join(DIST, "skills")).sort()
+  const folders = readdirSync(join(SRC, "skills")).sort()
   assert.deepEqual(state.skills.map((skill) => skill.id), folders)
   const byId = Object.fromEntries(state.skills.map((skill) => [skill.id, skill]))
   assert.equal(byId["poteto-mode"].autoinvoke, false)
@@ -86,7 +86,7 @@ test("/tdd sends the pstack file path when a user skill owns the tdd ID", async 
   await state.commands.find((command) => command.name === "tdd").execute({ sessionID: "s1", prompt: { text: "add a parser" }, delivery: "steer" })
   const [sent] = state.prompts
   assert.equal(sent.skills, undefined)
-  assert.match(sent.text, /dist\/skills\/tdd\/SKILL.md/)
+  assert.match(sent.text, /src\/skills\/tdd\/SKILL.md/)
   assert.match(sent.text, /add a parser$/)
 })
 

@@ -1,11 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 
 export const MODE_AGENT = "poteto-mode"
 export const MODELS_KEY = "pstack-models"
 export const MODE_KEY = "pstack-mode"
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
+const LINK = /\]\(([^)\s]+)\)/g
 
 function scalar(raw, continuation) {
   const value = raw.trim()
@@ -33,6 +34,15 @@ export function parseFrontmatter(text) {
   return { data, body: text.slice(match[0].length).replace(/^\s+/, "") }
 }
 
+function absoluteLinks(text, dir) {
+  return text.replace(LINK, (link, href) => {
+    const target = href.replace(/[#?].*/, "")
+    if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) return link
+    const path = resolve(dir, target)
+    return existsSync(path) ? `](${path}${href.slice(target.length)})` : link
+  })
+}
+
 export function readSkills(skillsDir) {
   return readdirSync(skillsDir)
     .filter((id) => existsSync(join(skillsDir, id, "SKILL.md")))
@@ -45,7 +55,7 @@ export function readSkills(skillsDir) {
         name: data.name || id,
         description: data.description ?? "",
         path,
-        content: body,
+        content: absoluteLinks(body, dirname(path)),
         autoinvoke: data["disable-model-invocation"] !== "true",
       }
     })
