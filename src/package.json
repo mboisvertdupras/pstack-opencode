@@ -1,0 +1,10 @@
+{
+  "name": "pstack-opencode",
+  "version": "0.15.36-opencode",
+  "description": "pstack for OpenCode.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./plugin/index.js"
+  }
+}
