@@ -9,7 +9,6 @@ import { report, scenarios, summarize } from "./routing-score.mjs"
 
 const HARNESS = join(import.meta.dirname, "harness.mjs")
 const SEED = join(import.meta.dirname, "..", "fixtures", "invoicing")
-const MODELS = join(homedir(), ".config", "opencode", "pstack-models.md")
 const TIMED_OUT = 124
 
 const { values: options } = parseArgs({
@@ -19,6 +18,7 @@ const { values: options } = parseArgs({
     scenarios: { type: "string", default: Object.keys(scenarios).join(",") },
     parallel: { type: "string", default: "1" },
     model: { type: "string", default: "claude-agent/haiku" },
+    models: { type: "string", default: join(homedir(), ".config", "opencode", "pstack-models.md") },
     out: { type: "string", default: join(import.meta.dirname, "..", "..", "..", "..", "verify-evidence", "routing") },
     timeout: { type: "string" },
     rescore: { type: "string" },
@@ -40,11 +40,10 @@ function harness(args, env) {
   })
 }
 
-// Transcripts are echoed before the harness's own trailer, so the last match is the harness's.
-const lastField = (out, name) => [...out.matchAll(new RegExp(`^${name} +(\\S+)`, "gm"))].at(-1)?.[1]
+const trailerField = (out, name) => [...out.matchAll(new RegExp(`^${name} +(\\S+)`, "gm"))].at(-1)?.[1]
 const tail = (out) => out.trim().split("\n").slice(-5).join(" | ")
 
-async function runOne(scenario, index, { label, model, timeoutMs, runsDir }) {
+async function runOne(scenario, index, { label, model, models, timeoutMs, runsDir }) {
   const spec = scenarios[scenario]
   const id = `${scenario}-${index + 1}-${Date.now().toString(36)}`
   const started = Date.now()
@@ -53,18 +52,18 @@ async function runOne(scenario, index, { label, model, timeoutMs, runsDir }) {
   const record = { id, scenario, label, model, sessionTree: undefined, exit: undefined }
   console.log(`start ${id}`)
 
-  const up = await harness(["up"], { PSTACK_VERIFY_SEED: SEED, ...(existsSync(MODELS) ? { PSTACK_VERIFY_MODELS: MODELS } : {}) })
-  const runDir = lastField(up.out, "run")
+  const up = await harness(["up"], { PSTACK_VERIFY_SEED: SEED, ...(models ? { PSTACK_VERIFY_MODELS: models } : {}) })
+  const runDir = trailerField(up.out, "run")
   try {
     if (up.code !== 0) throw new Error(`up exited ${up.code}: ${tail(up.out)}`)
     const drive = await harness(drives[spec.drive.via](spec.drive, model, spec.prompt), { PSTACK_VERIFY_RUN: runDir, PSTACK_VERIFY_TIMEOUT: remaining() })
     record.exit = drive.code
     if (drive.code === TIMED_OUT) record.error = `timeout after ${Date.now() - started}ms while driving`
     else if (drive.code !== 0) record.error = `${spec.drive.via} exited ${drive.code}: ${tail(drive.out)}`
-    const sessionID = lastField(drive.out, "session")
+    const sessionID = trailerField(drive.out, "session")
     if (!sessionID || sessionID === "unknown") throw new Error(`no session id from ${spec.drive.via}: ${tail(drive.out)}`)
     const tree = await harness(["tree", sessionID], { PSTACK_VERIFY_RUN: runDir, PSTACK_VERIFY_TIMEOUT: remaining() })
-    const proof = lastField(tree.out, "proof")
+    const proof = trailerField(tree.out, "proof")
     if (proof && existsSync(proof)) record.sessionTree = JSON.parse(readFileSync(proof, "utf8"))
     if (tree.code === TIMED_OUT) record.error ??= `timeout after ${Date.now() - started}ms waiting for the session tree to settle`
     else if (tree.code !== 0) record.error ??= `tree exited ${tree.code}: ${tail(tree.out)}`
@@ -107,12 +106,13 @@ if (options.rescore) {
   const names = options.scenarios.split(",").map((name) => name.trim())
   const unknown = names.filter((name) => !scenarios[name])
   if (unknown.length) throw new Error(`unknown scenarios ${unknown.join(", ")}. Known: ${Object.keys(scenarios).join(", ")}`)
-  if (!existsSync(MODELS)) console.log(`warn  ${MODELS} is missing, so runs use the skill default models`)
+  const models = existsSync(options.models) ? resolve(options.models) : undefined
+  if (!models) console.log(`warn  ${options.models} is missing, so delegates use the skill default models`)
 
   const dir = join(resolve(options.out), options.label)
   const runsDir = join(dir, "runs")
   mkdirSync(runsDir, { recursive: true })
-  const settings = { label: options.label, model: options.model, timeoutMs: options.timeout ? Number(options.timeout) : undefined, runsDir }
+  const settings = { label: options.label, model: options.model, models, timeoutMs: options.timeout ? Number(options.timeout) : undefined, runsDir }
   const jobs = Array.from({ length: Number(options.runs) }, (_, index) => names.map((name) => [name, index])).flat()
   const records = []
   let next = 0
@@ -124,5 +124,5 @@ if (options.rescore) {
       }
     }),
   )
-  finish(dir, records, jobs.length, { label: options.label, model: options.model, scenarios: names, runs: Number(options.runs) })
+  finish(dir, records, jobs.length, { label: options.label, model: options.model, models, scenarios: names, runs: Number(options.runs) })
 }

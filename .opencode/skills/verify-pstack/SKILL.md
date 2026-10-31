@@ -76,7 +76,7 @@ The routing eval measures whether pstack loads the skill a playbook step names, 
 node .opencode/skills/verify-pstack/scripts/routing-eval.mjs --label <arm> --runs 3 --scenarios feature-agent,feature-slash,investigate,plain-build --parallel 2 --model claude-agent/opus#medium
 ```
 
-Each run starts its own server with the fixture as the seed and `~/.config/opencode/pstack-models.md` as the model file. It drives one scenario, waits for the parent and every descendant to settle, saves the tree, and always runs `down`. Records go to `verify-evidence/routing/<label>/runs/`, and the scores go to `summary.json` next to them. Pass `--out <dir>` to write elsewhere, and `--timeout <ms>` to cap every run below its scenario's default.
+Each run starts its own server with the fixture as the seed and `~/.config/opencode/pstack-models.md` as the model file. It drives one scenario, waits for the parent and every descendant to settle, saves the tree, and always runs `down`. Records go to `verify-evidence/routing/<label>/runs/`, and the scores go to `summary.json` next to them. Pass `--out <dir>` to write elsewhere, `--models <file>` to use another model file, and `--timeout <ms>` to cap every run below its scenario's default.
 
 `scripts/routing-score.mjs` holds the scenario registry and the checks.
 
@@ -86,7 +86,7 @@ Each run starts its own server with the fixture as the seed and `~/.config/openc
 
 The output is a scenario-by-check pass table, a `gate=` line per gate, and a last line of `routing_accuracy=<0.xx> errors=<n> work=<scored>/<planned> commits=<n> toolcalls=<n>`. A run with a harness failure, a nonzero exit, a timeout, or no tool calls counts as an error and is left out of the accuracy. To change a check and score the saved runs again without new turns, use `--rescore verify-evidence/routing/<label>`.
 
-Every run spends real tokens. One real Opus feature session with a single delegate took about 12 minutes and 3.2 million cache-read tokens across its two sessions, and a full arm multiplies that by runs times feature scenarios. Validate a change to the eval itself with `--model claude-agent/haiku` and one run per scenario before you spend a paid model on it.
+Every run spends real tokens. One real Opus feature session with a single delegate took about 12 minutes and 3.2 million cache-read tokens across its two sessions, and a full arm multiplies that by runs times feature scenarios. `--model` sets only the parent. Delegates take their models from the model file, so a haiku parent on your own `pstack-models.md` still spawns Opus and GPT architect runners and an Opus `poteto-agent`. Validate a change to the eval itself with `--model claude-agent/haiku --models .opencode/skills/verify-pstack/fixtures/pstack-models-inherit.md` and one run per scenario, which keeps every delegate on the parent model, before you spend a paid model on it.
 
 Features and their recipes live in [`features/`](features/README.md). Read the index, then follow the feature file that matches the change.
 

@@ -7,7 +7,6 @@ export function shippingFor(subtotal) {
   return subtotal === 0 || subtotal >= SHIPPING.freeOver ? 0 : SHIPPING.flat
 }
 
-// Tax is rounded per line, the way the invoice prints it, so the printed lines always add up to the total.
 export function priceCart(cart, region) {
   const lines = cart.lines.map((line) => {
     const amount = line.unitPrice * line.quantity

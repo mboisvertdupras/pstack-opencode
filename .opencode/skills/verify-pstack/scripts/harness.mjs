@@ -52,7 +52,6 @@ const sessionInfo = (state, sessionID) => api(state, ["session.get", "--param", 
 const isIdle = (info) => !info.time.busy || (info.time.idle ?? 0) >= info.time.busy
 const descendants = (state, sessionID) => api(state, ["session.list", "--param", `parentID=${sessionID}`]).flatMap((child) => [child, ...descendants(state, child.id)])
 
-// The wait call can return before the loop is idle, for example on a dropped connection, so idleness is read back from the session.
 async function waitIdle(state, sessionID, deadline) {
   while (Date.now() < deadline) {
     apiCall(state, ["experimental.session.wait", "--param", `sessionID=${sessionID}`], deadline - Date.now())

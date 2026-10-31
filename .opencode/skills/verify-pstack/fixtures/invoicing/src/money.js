@@ -7,7 +7,6 @@ export function assertCents(value, field = "amount") {
 
 export const sum = (amounts) => amounts.reduce((total, amount) => total + amount, 0)
 
-// Rates are basis points (1300 = 13%) so tax math never touches floats until the final round.
 export const percentOf = (amount, basisPoints) => Math.round((amount * basisPoints) / 10_000)
 
 export function formatMoney(amount, currency = "USD") {
