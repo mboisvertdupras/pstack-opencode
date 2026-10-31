@@ -62,6 +62,15 @@ test("a relative link must point at a file that exists", () => {
   assert.deepEqual(found("An example: `[PR](missing.md)`.", SKILL, exists), [])
 })
 
+test("a named skill must be an ID the skill tool can load", () => {
+  const exists = (path) => path.endsWith("src/skills/why/SKILL.md")
+  assert.deepEqual(found("Use the `why` skill, the `skill-creator` skill, and the `gone` skill.", SKILL, exists), ["skill-id the `gone` skill"])
+  assert.deepEqual(found("Use the **why** skill and the **prove-it-works** principle skill.", SKILL, exists), [
+    "skill-id the **why** skill",
+    "skill-id the **prove-it-works** principle skill",
+  ])
+})
+
 test("a SKILL.md names its folder and has a description", () => {
   assert.deepEqual(
     lint([{ file: SKILL, text: "---\nname: what\n---\n\n# How\n" }]).map(({ line, rule, text }) => `${line} ${rule} ${text}`),

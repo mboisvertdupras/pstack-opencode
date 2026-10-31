@@ -20,6 +20,7 @@ const RULES = [
   { rule: "vocab", scope: "markdown", pattern: /\btodolist\b|\.mdc\b|(?<![\w/.])\/loop\b|\bagent-transcripts\b/g },
   { rule: "vocab", scope: "markdown", pattern: /\b[Cc]ustom [Mm]ode\b|\bcreate-skill\b|\bupdate_state\b|\bSendToUser\b|\bAutomations\b/g },
   { rule: "vocab", scope: "markdown", pattern: /\b(?:claude|grok|gpt|gemini|composer)-[\w.-]*?-(?:max|xhigh|high|medium|low|fast)(?:-fast)?\b/g },
+  { rule: "skill-id", scope: "markdown", pattern: /the \*\*[a-z0-9-]+\*\*(?: principle)? skill/g },
   { rule: "vocab", scope: "markdown", pattern: /\bfast (?:mode|speed|slug|variant)\b|\bstandard speed\b|\bfast or standard\b|\balwaysApply\b|\bUse as Mode\b|[Oo]ption\+[Ee]nter|\bcursor-grok\b|\bcloud agents?\b|\breadonly (?:judge|agent|subagent|mode|reviewer|explorer)s?\b|readonly\/Ask\b/g },
 ]
 
@@ -60,6 +61,17 @@ function linkFindings(file, lines, exists) {
   )
 }
 
+const CATALOG_SKILLS = new Set(["browser", "skill-creator", "writing-for-agents"])
+
+function skillIdFindings(file, lines, exists) {
+  const root = file.match(/^(.*\/skills)\//)?.[1] ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "src", "skills")
+  return lines.flatMap(({ markdown }, index) =>
+    [...(markdown ?? "").matchAll(/the `([a-z0-9-]+)` skill\b/g)]
+      .filter(([, id]) => !CATALOG_SKILLS.has(id) && !exists(join(root, id, "SKILL.md")))
+      .map(([match]) => ({ file, line: index + 1, rule: "skill-id", text: match })),
+  )
+}
+
 export function lint(files, exists = existsSync) {
   return files.flatMap(({ file, text }) => {
     const lines = scanLines(file, text)
@@ -68,7 +80,8 @@ export function lint(files, exists = existsSync) {
         [...(line[scope] ?? "").matchAll(pattern)].map(([match]) => ({ file, line: index + 1, rule, text: match })),
       ),
     )
-    return [...frontmatterFindings(file, text), ...matches, ...(isMarkdown(file) ? linkFindings(file, lines, exists) : [])]
+    const markdown = isMarkdown(file) ? [...linkFindings(file, lines, exists), ...skillIdFindings(file, lines, exists)] : []
+    return [...frontmatterFindings(file, text), ...matches, ...markdown]
   })
 }
 
