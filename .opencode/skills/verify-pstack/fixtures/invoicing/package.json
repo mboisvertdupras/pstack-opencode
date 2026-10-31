@@ -1,0 +1,9 @@
+{
+  "name": "invoicing",
+  "private": true,
+  "type": "module",
+  "description": "Customers, a catalog, carts and checkout, invoices, and invoice email for a small shop.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
