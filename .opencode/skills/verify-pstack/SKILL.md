@@ -29,6 +29,8 @@ H=.opencode/skills/verify-pstack/scripts/harness.mjs
 
    It makes a run folder under `$TMPDIR/opencode/pstack-verify/run-*`, with its own OpenCode config folder and a seeded git project holding `math.js`. It installs pstack into that config with `scripts/install.mjs`, sets `experimental.todo` and `experimental.subagent_depth: 2`, and starts `opencode serve` on a free port. It prints `ready` only after every skill in `src/skills` is registered at the project, which takes a few seconds after the port answers.
 
+   `PSTACK_VERIFY_SEED=<dir>` seeds the project with a copy of that folder instead of `math.js`. `PSTACK_VERIFY_MODELS=<file>` copies a model file to the run's `pstack-models.md`. `up` prints the run folder on its first line. A script that runs several servers passes it as `PSTACK_VERIFY_RUN` to every later call, because the shared `latest` pointer belongs to whichever `up` ran last.
+
 3. Load the run's paths when a step needs them.
 
    ```sh
@@ -57,11 +59,34 @@ Each subcommand saves its evidence and prints the path on a `proof` line. Turns 
 | A follow-up in the same session | `$H run --session <sid> "<prompt>"` |
 | A slash command, as the TUI sends it | `$H command <name> [--agent <id>] "<text>"` |
 | Which skills each user message carried, plus tool calls and replies | `$H export <sid>` |
+| A session and every descendant, with instruction entries, once all of them stay idle | `$H tree <sid>` |
 | The session's instruction entries | `$H entries <sid>` |
 | Subagent sessions a session spawned | `$H children <sid>` |
 | Where a skill ID resolves | `$H skill <id>` |
 
 `opencode run` has no way to invoke a slash command, so `$H command` creates a session and calls the `session.command` API, which is the same path the TUI uses. `run` prints `session <sid>` at the end. Pass it to the inspection commands.
+
+`run`, `command`, and `tree` stop after `PSTACK_VERIFY_TIMEOUT` milliseconds, 600000 by default, and exit 124 when they do.
+
+## Routing eval
+
+The routing eval measures whether pstack loads the skill a playbook step names, at that step. It drives scenarios against the `fixtures/invoicing` project, then scores the exported session tree.
+
+```sh
+node .opencode/skills/verify-pstack/scripts/routing-eval.mjs --label <arm> --runs 3 --scenarios feature-agent,feature-slash,investigate,plain-build --parallel 2 --model claude-agent/opus#medium
+```
+
+Each run starts its own server with the fixture as the seed and `~/.config/opencode/pstack-models.md` as the model file. It drives one scenario, waits for the parent and every descendant to settle, saves the tree, and always runs `down`. Records go to `verify-evidence/routing/<label>/runs/`, and the scores go to `summary.json` next to them. Pass `--out <dir>` to write elsewhere, and `--timeout <ms>` to cap every run below its scenario's default.
+
+`scripts/routing-score.mjs` holds the scenario registry and the checks.
+
+- **Feature scenarios.** `feature-agent` runs under the `poteto-mode` agent, and `feature-slash` sends `/poteto-mode` under `build`. Both check that the parent loads `how` and `architect` or `arena` before its first `poteto-agent` delegation, that a `poteto-agent` wrote code, that `deslop` precedes every commit in its own session, that `no-comments` loads before the last commit, and that the parent loads `unslop`.
+- **Investigate.** The parent loads `how` and `unslop`.
+- **The `plain-build` gate.** A small change under `build` commits, gets no `pstack-mode` entry, and loads no hidden pstack skill.
+
+The output is a scenario-by-check pass table, a `gate=` line per gate, and a last line of `routing_accuracy=<0.xx> errors=<n> work=<scored>/<planned> commits=<n> toolcalls=<n>`. A run with a harness failure, a nonzero exit, a timeout, or no tool calls counts as an error and is left out of the accuracy. To change a check and score the saved runs again without new turns, use `--rescore verify-evidence/routing/<label>`.
+
+Every run spends real tokens. One real Opus feature session with a single delegate took about 12 minutes and 3.2 million cache-read tokens across its two sessions, and a full arm multiplies that by runs times feature scenarios. Validate a change to the eval itself with `--model claude-agent/haiku` and one run per scenario before you spend a paid model on it.
 
 Features and their recipes live in [`features/`](features/README.md). Read the index, then follow the feature file that matches the change.
 
@@ -88,7 +113,7 @@ To stop a run whose state is lost, find its `pid` in `$TMPDIR/opencode/pstack-ve
 
 ## Helpers
 
-`scripts/harness.mjs` is the only helper. Run it with no arguments for usage. It needs `opencode`, `node`, and `git` on `PATH`, plus the user's own OpenCode credentials, because models come from the real data folder.
+`scripts/harness.mjs` drives one server. Run it with no arguments for usage. `scripts/routing-eval.mjs` runs the routing eval on top of it, and `scripts/routing-score.mjs` scores the records it saves. It needs `opencode`, `node`, and `git` on `PATH`, plus the user's own OpenCode credentials, because models come from the real data folder.
 
 ## Gotchas
 
