@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process"
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -11,6 +11,9 @@ const SRC = join(REPO, "src")
 const BASE = join(existsSync(join(tmpdir(), "opencode")) ? join(tmpdir(), "opencode") : tmpdir(), "pstack-verify")
 const LATEST = join(BASE, "latest")
 const MODEL = process.env.PSTACK_VERIFY_MODEL ?? "claude-agent/haiku"
+const TIMEOUT = Number(process.env.PSTACK_VERIFY_TIMEOUT ?? 600_000)
+const SETTLE_MS = 10_000
+const TIMED_OUT = 124
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function die(message) {
@@ -28,16 +31,54 @@ function loadState() {
 const envFor = (state) => ({ ...process.env, PWD: state.proj, XDG_CONFIG_HOME: state.config, OPENCODE_PASSWORD: state.password })
 
 // `opencode api` output is cut at 64 KiB when piped, so every call writes to a file and reads it back.
-function api(state, args) {
+function apiCall(state, args, timeout) {
   const out = join(state.runDir, `api-${process.pid}-${Date.now()}.json`)
   const fd = openSync(out, "w")
-  const result = spawnSync("opencode", ["api", "--server", state.url, ...args], { cwd: state.proj, env: envFor(state), stdio: ["ignore", fd, "pipe"], encoding: "utf8" })
+  const result = spawnSync("opencode", ["api", "--server", state.url, ...args], { cwd: state.proj, env: envFor(state), stdio: ["ignore", fd, "pipe"], encoding: "utf8", timeout })
   closeSync(fd)
   const text = readFileSync(out, "utf8")
   rmSync(out)
-  if (result.status !== 0) die(`opencode api ${args.join(" ")} exited ${result.status}: ${(result.stderr || text).trim().slice(0, 400)}`)
+  return { status: result.status, text, stderr: result.stderr }
+}
+
+function api(state, args) {
+  const { status, text, stderr } = apiCall(state, args)
+  if (status !== 0) die(`opencode api ${args.join(" ")} exited ${status}: ${(stderr || text).trim().slice(0, 400)}`)
   const json = text.trim() ? JSON.parse(text) : undefined
   return json?.data ?? json
+}
+
+const sessionInfo = (state, sessionID) => api(state, ["session.get", "--param", `sessionID=${sessionID}`])
+const isIdle = (info) => !info.time.busy || (info.time.idle ?? 0) >= info.time.busy
+const descendants = (state, sessionID) => api(state, ["session.list", "--param", `parentID=${sessionID}`]).flatMap((child) => [child, ...descendants(state, child.id)])
+
+// The wait call can return before the loop is idle, for example on a dropped connection, so idleness is read back from the session.
+async function waitIdle(state, sessionID, deadline) {
+  while (Date.now() < deadline) {
+    apiCall(state, ["experimental.session.wait", "--param", `sessionID=${sessionID}`], deadline - Date.now())
+    if (isIdle(sessionInfo(state, sessionID))) return true
+    await sleep(1000)
+  }
+  return false
+}
+
+// A background child's report wakes its parent after the child goes idle, so the tree is settled only once nothing in it changes across a quiet window.
+async function settle(state, sessionID, deadline) {
+  let quiet
+  while (Date.now() < deadline) {
+    const tree = [sessionInfo(state, sessionID), ...descendants(state, sessionID)]
+    const busy = tree.find((info) => !isIdle(info))
+    if (busy) {
+      quiet = undefined
+      await waitIdle(state, busy.id, deadline)
+      continue
+    }
+    const mark = tree.map((info) => `${info.id}@${info.time.updated}`).join(" ")
+    if (mark === quiet) return true
+    quiet = mark
+    await sleep(SETTLE_MS)
+  }
+  return false
 }
 
 const locationQuery = (state) => `location%5Bdirectory%5D=${encodeURIComponent(state.proj)}`
@@ -113,6 +154,7 @@ const commands = {
     const proj = join(runDir, "proj")
     const stamp = new Date().toISOString().replace(/[:.]/g, "-")
     const evidence = join(REPO, "verify-evidence", stamp)
+    console.log(`run     ${runDir}`)
     mkdirSync(join(config, "opencode"), { recursive: true })
     mkdirSync(proj)
     mkdirSync(evidence, { recursive: true })
@@ -120,9 +162,11 @@ const commands = {
     const install = spawnSync("node", [join(REPO, "scripts", "install.mjs")], { env: { ...process.env, XDG_CONFIG_HOME: config }, encoding: "utf8" })
     if (install.status !== 0) die(`install.mjs exited ${install.status}: ${install.stdout}${install.stderr}`)
     writeFileSync(join(config, "opencode", "opencode.json"), `${JSON.stringify({ experimental: { todo: true, subagent_depth: 2 } }, null, 2)}\n`)
+    if (process.env.PSTACK_VERIFY_MODELS) copyFileSync(process.env.PSTACK_VERIFY_MODELS, join(config, "opencode", "pstack-models.md"))
 
     // A repo with no commit shares one project ID with every other commitless repo, which mixes their sessions into ours.
-    writeFileSync(join(proj, "math.js"), "export const add = (a, b) => a + b\n")
+    if (process.env.PSTACK_VERIFY_SEED) cpSync(process.env.PSTACK_VERIFY_SEED, proj, { recursive: true })
+    else writeFileSync(join(proj, "math.js"), "export const add = (a, b) => a + b\n")
     for (const args of [["init", "-q"], ["add", "-A"], ["-c", "user.email=verify@pstack", "-c", "user.name=verify", "commit", "-qm", "seed"]]) {
       if (spawnSync("git", args, { cwd: proj }).status !== 0) die(`git ${args.join(" ")} failed in ${proj}`)
     }
@@ -189,13 +233,15 @@ const commands = {
     const state = loadState()
     const before = new Set(projectSessions(state).map((session) => session.id))
     const model = args.includes("--model") || args.includes("-m") ? [] : ["--model", MODEL]
-    const result = spawnSync("opencode", ["run", "--server", state.url, ...model, ...args], { cwd: state.proj, env: envFor(state), encoding: "utf8", timeout: 600_000 })
+    const result = spawnSync("opencode", ["run", "--server", state.url, ...model, ...args], { cwd: state.proj, env: envFor(state), encoding: "utf8", timeout: TIMEOUT })
     const after = projectSessions(state)
     const created = after.find((session) => !before.has(session.id)) ?? [...after].sort((a, b) => b.updated - a.updated)[0]
-    const output = `$ opencode run ${[...model, ...args].map((arg) => JSON.stringify(arg)).join(" ")}\nexit ${result.status}\n\n${result.stdout}${result.stderr}`
+    const exit = result.error?.code === "ETIMEDOUT" ? `timeout after ${TIMEOUT}ms` : result.status
+    const output = `$ opencode run ${[...model, ...args].map((arg) => JSON.stringify(arg)).join(" ")}\nexit ${exit}\n\n${result.stdout}${result.stderr}`
     const file = save(state, `run-${created?.id ?? Date.now()}.txt`, output)
     console.log(output.trimEnd())
     console.log(`\nsession ${created?.id ?? "unknown"}\nproof   ${file}`)
+    if (result.error?.code === "ETIMEDOUT") process.exit(TIMED_OUT)
     if (result.status !== 0) process.exit(result.status ?? 1)
   },
 
@@ -207,10 +253,23 @@ const commands = {
     if (!name) die("usage: harness.mjs command <name> [--agent id] [--model provider/model#variant] <text...>")
     const session = api(state, ["session.create", "--data", JSON.stringify({ title: `verify /${name}`, agent, model: modelRef(model), location: { directory: state.proj } })])
     api(state, ["session.command", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ name, text: words.join(" ") })])
-    api(state, ["experimental.session.wait", "--param", `sessionID=${session.id}`])
+    const idle = await waitIdle(state, session.id, Date.now() + TIMEOUT)
     const summary = summarize(exportSession(state, session.id))
-    save(state, `command-${name}-${session.id}.txt`, `/${name} ${words.join(" ")}\nagent ${agent} model ${model}\n\n${summary}\n`)
+    save(state, `command-${name}-${session.id}.txt`, `/${name} ${words.join(" ")}\nagent ${agent} model ${model}\n${idle ? "" : `timeout after ${TIMEOUT}ms\n`}\n${summary}\n`)
     console.log(`session ${session.id}\n${summary}\nproof   ${evidencePath(state, `command-${name}-${session.id}.txt`)}`)
+    if (!idle) process.exit(TIMED_OUT)
+  },
+
+  async tree([sessionID]) {
+    const state = loadState()
+    if (!sessionID) die("usage: harness.mjs tree <sessionID>")
+    const settled = await settle(state, sessionID, Date.now() + TIMEOUT)
+    const withEntries = (id) => ({ ...exportSession(state, id), entries: api(state, ["experimental.session.instructions.entry.list", "--param", `sessionID=${id}`]) })
+    const parent = withEntries(sessionID)
+    const children = descendants(state, sessionID).map((child) => withEntries(child.id))
+    const file = save(state, `tree-${sessionID}.json`, { parent, children })
+    console.log(`${settled ? "settled" : `timeout after ${TIMEOUT}ms`} ${1 + children.length} sessions\nproof   ${file}`)
+    if (!settled) process.exit(TIMED_OUT)
   },
 
   async export([sessionID]) {
@@ -289,7 +348,7 @@ const commands = {
 
 const [name, ...args] = process.argv.slice(2)
 if (!commands[name]) {
-  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | export <sid> | entries <sid> | children <sid> | skill <id> | env | down")
+  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
   process.exit(name ? 1 : 0)
 }
 await commands[name](args)
