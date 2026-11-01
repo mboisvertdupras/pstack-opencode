@@ -18,6 +18,11 @@ function fakeContext({ modelsFile, sessions = {}, registered = [] } = {}) {
       list: async () => ({ data: [...state.skills, ...registered].reverse() }),
     },
     command: { transform: async (fn) => fn({ add: (command) => state.commands.push(command) }) },
+    tool: {
+      hook: async (name, fn) => {
+        state.hooks[name] = fn
+      },
+    },
     session: {
       hook: async (name, fn) => {
         state.hooks[name] = fn
@@ -147,4 +152,45 @@ test("a failing OpenCode call never breaks the user's prompt", async () => {
     console.error = original
   }
   assert.equal(errors.length, 1)
+})
+
+const shell = (sessionID, agent, command) => ({ tool: "shell", sessionID, agent, input: { command } })
+
+test("a poteto-agent commit is blocked until deslop loads, then every commit passes", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  const commit = shell("s1", "poteto-agent", 'printf x > a && git commit -m "a"')
+  await assert.rejects(async () => state.hooks["execute.before"](commit), /load the `deslop` skill.*rerun `git commit` as its own command/s)
+
+  await state.hooks["execute.after"]({ tool: "skill", sessionID: "s1", agent: "poteto-agent", input: { id: "deslop" }, status: "error" })
+  await assert.rejects(async () => state.hooks["execute.before"](commit))
+
+  await state.hooks["execute.after"]({ tool: "skill", sessionID: "s1", agent: "poteto-agent", input: { id: "deslop" }, status: "completed" })
+  await state.hooks["execute.before"](commit)
+  await state.hooks["execute.before"](shell("s1", "poteto-agent", "git commit --amend --no-edit"))
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s2", "poteto-mode", "git commit -m b")))
+})
+
+test("a build session commits freely", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  await state.hooks["execute.before"](shell("s1", "build", "git add -A && git commit -m a"))
+})
+
+test("/poteto-mode gates commits in its build session", async () => {
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } } })
+  await plugin.setup(ctx)
+  await state.commands.find((command) => command.name === "poteto-mode").execute({ sessionID: "s1", prompt: { text: "fix it" }, delivery: "steer" })
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", "git commit -m a")))
+  await state.hooks["execute.before"](shell("s2", "build", "git commit -m a"))
+})
+
+test("the gate matches git commit behind global flags and nothing that only mentions it", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  const gated = ["git -C repo commit -m a", "git -c user.name=me --no-pager commit", "cd repo && git commit", "true; git commit"]
+  for (const command of gated) await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "poteto-agent", command)), command)
+  const free = ["git commit-tree HEAD^{tree}", 'echo "git commit"', "git log --grep commit", "git status"]
+  for (const command of free) await state.hooks["execute.before"](shell("s1", "poteto-agent", command))
+  await state.hooks["execute.before"]({ tool: "edit", sessionID: "s1", agent: "poteto-agent", input: { command: "git commit" } })
 })

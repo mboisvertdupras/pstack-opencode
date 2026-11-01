@@ -8,6 +8,7 @@ import {
   MODELS_KEY,
   commandDescription,
   commandPrompt,
+  commitGate,
   entryOps,
   modeEntry,
   modelsEntry,
@@ -70,6 +71,9 @@ export default {
       }
     }
 
+    const gates = new Map()
+    const mark = (sessionID, flag) => gates.set(sessionID, { ...gates.get(sessionID), [flag]: true })
+
     const shadowingPath = async (sessionID, skill) => {
       const session = unwrap(await ctx.session.get({ sessionID }))
       const directory = session?.location?.directory
@@ -89,6 +93,7 @@ export default {
           name: skill.id,
           description: commandDescription(skill.description),
           execute: async ({ sessionID, prompt, delivery }) => {
+            if (skill.id === MODE_AGENT) mark(sessionID, "mode")
             const { text, attach } = commandPrompt(skill, prompt.text ?? "", await shadowingPath(sessionID, skill))
             const attached = attach ? [...(prompt.skills ?? []), { id: skill.id }] : prompt.skills
             await ctx.session.prompt({ ...prompt, sessionID, delivery, text, ...(attached ? { skills: attached } : {}) })
@@ -115,5 +120,14 @@ export default {
       "context",
       guarded("context", (event) => reconcile(event.sessionID, event.agent)),
     )
+
+    await ctx.tool.hook("execute.before", (event) => {
+      const blocked = commitGate(gates.get(event.sessionID), event)
+      if (blocked) throw new Error(blocked)
+    })
+
+    await ctx.tool.hook("execute.after", (event) => {
+      if (event.tool === "skill" && event.input.id === "deslop" && event.status === "completed") mark(event.sessionID, "deslop")
+    })
   },
 }

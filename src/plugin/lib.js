@@ -4,6 +4,11 @@ import { dirname, join, resolve } from "node:path"
 export const MODE_AGENT = "poteto-mode"
 export const MODELS_KEY = "pstack-models"
 export const MODE_KEY = "pstack-mode"
+const MODE_AGENTS = [MODE_AGENT, "poteto-agent"]
+const COMMIT_GATE =
+  "pstack: load the `deslop` skill with the `skill` tool and follow it on the staged diff before you commit. Then rerun `git commit` as its own command, because this whole shell command was rejected and nothing in it ran."
+
+const GIT_COMMIT = /(?:^|[;&|(\n])\s*git(?:\s+-\S+(?:\s+[^-\s;&|]\S*)?)*\s+commit(?=$|[\s;&|)])/
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 const LINK = /\]\(([^)\s]+)\)/g
@@ -87,6 +92,12 @@ export function modeEntry(root) {
 export function modelsEntry(file, text) {
   if (!text) return undefined
   return `pstack per-role model choices, written by /setup-pstack to \`${file}\`. Each role line overrides that role's default model in pstack skills.\n\n${text}`
+}
+
+export function commitGate(session = {}, { tool, agent, input }) {
+  if (tool !== "shell" || !GIT_COMMIT.test(input.command)) return undefined
+  if (session.deslop || !(session.mode || MODE_AGENTS.includes(agent))) return undefined
+  return COMMIT_GATE
 }
 
 export function entryOps(want, have) {
