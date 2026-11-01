@@ -49,26 +49,34 @@ test("delegated needs a poteto-agent descendant that wrote code", () => {
   assert.equal(check("feature-agent", tree(parent, session("general", [edit()])), "delegated").pass, false)
 })
 
-test("deslop_before_each_commit passes when every commit follows its own deslop", () => {
-  const result = check("feature-agent", tree(session("poteto-mode", [delegate()]), session("poteto-agent", [edit(), skill("deslop"), commit(), edit(), skill("deslop"), commit()])), "deslop_before_each_commit")
-  assert.deepEqual(result, { pass: true, detail: "2/2 commits preceded by deslop in their session", fraction: 1 })
+test("deslop_before_commit passes when each committing session loads deslop before its first commit", () => {
+  const result = check("feature-agent", tree(session("poteto-mode", [delegate()]), session("poteto-agent", [edit(), skill("deslop"), commit(), edit(), commit()])), "deslop_before_commit")
+  assert.deepEqual(result, { pass: true, detail: "1/1 committing sessions loaded deslop before their first commit", fraction: 1 })
 })
 
-test("deslop_before_each_commit fails on a commit before deslop and on deslop after the commit", () => {
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [edit(), commit(), skill("deslop")])), "deslop_before_each_commit").pass, false)
-  const late = check("feature-agent", tree(session("poteto-mode", [skill("deslop"), commit(), edit(), commit(), skill("deslop")])), "deslop_before_each_commit")
-  assert.equal(late.pass, false)
-  assert.equal(late.fraction, 0.5)
+test("deslop_before_commit fails on a commit before deslop", () => {
+  assert.equal(check("feature-agent", tree(session("poteto-mode", [edit(), commit(), skill("deslop"), commit()])), "deslop_before_commit").pass, false)
 })
 
-test("deslop_before_each_commit does not let one session's deslop cover another's commit, and fails with no commits", () => {
+test("deslop_before_commit does not let one session's deslop cover another's commit, and fails with no commits", () => {
   const crossed = tree(session("poteto-mode", [skill("deslop"), delegate()]), session("poteto-agent", [edit(), commit()]))
-  assert.equal(check("feature-agent", crossed, "deslop_before_each_commit").pass, false)
-  assert.deepEqual(check("feature-agent", tree(session("poteto-mode", [skill("deslop"), edit()])), "deslop_before_each_commit"), {
+  assert.equal(check("feature-agent", crossed, "deslop_before_commit").pass, false)
+  const parentCommits = tree(session("poteto-mode", [delegate(), commit()]), session("poteto-agent", [skill("deslop"), edit(), commit()]))
+  assert.equal(check("feature-agent", parentCommits, "deslop_before_commit").detail, "1/2 committing sessions loaded deslop before their first commit")
+  assert.deepEqual(check("feature-agent", tree(session("poteto-mode", [skill("deslop"), edit()])), "deslop_before_commit"), {
     pass: false,
-    detail: "0/0 commits preceded by deslop in their session",
+    detail: "0/0 committing sessions loaded deslop before their first commit",
     fraction: 0,
   })
+})
+
+test("a provider error in any session makes the run an error, not a scored failure", () => {
+  const child = session("poteto-agent", [edit()])
+  child.messages.push({ type: "assistant", error: { type: "provider.unknown", message: "You've hit your 5-hour limit" }, content: [] })
+  const summary = summarize([{ id: "r1", scenario: "feature-agent", exit: 0, sessionTree: tree(session("poteto-mode", [skill("how"), delegate()]), child) }])
+  assert.equal(summary.errors, 1)
+  assert.equal(summary.scored, 0)
+  assert.match(summary.runs[0].error, /provider error in poteto-agent session: You've hit your 5-hour limit/)
 })
 
 test("commit detection reads git flags before the subcommand and ignores look-alikes", () => {

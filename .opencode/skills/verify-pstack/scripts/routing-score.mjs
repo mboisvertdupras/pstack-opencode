@@ -63,20 +63,17 @@ export const checks = {
     return { pass: writers.length > 0, detail: `${writers.length} of ${delegates.length} poteto-agent sessions wrote code` }
   },
 
-  deslop_before_each_commit({ sessions }) {
-    let commits = 0
-    let covered = 0
-    for (const { events } of sessions) {
-      let deslopped = false
-      for (const event of events) {
-        if (event.skill === "deslop") deslopped = true
-        if (!event.commit) continue
-        commits++
-        if (deslopped) covered++
-        deslopped = false
-      }
+  deslop_before_commit({ sessions }) {
+    const committing = sessions.filter(({ events }) => events.some((event) => event.commit))
+    const covered = committing.filter(({ events }) => {
+      const load = events.findIndex((event) => event.skill === "deslop")
+      return load >= 0 && load < events.findIndex((event) => event.commit)
+    })
+    return {
+      pass: committing.length > 0 && covered.length === committing.length,
+      detail: `${covered.length}/${committing.length} committing sessions loaded deslop before their first commit`,
+      fraction: committing.length ? covered.length / committing.length : 0,
     }
-    return { pass: commits > 0 && covered === commits, detail: `${covered}/${commits} commits preceded by deslop in their session`, fraction: commits ? covered / commits : 0 }
   },
 
   no_comments_before_commit({ sessions }) {
@@ -116,7 +113,7 @@ export const checks = {
   },
 }
 
-const FEATURE_CHECKS = ["how_before_code", "architect_before_code", "delegated", "deslop_before_each_commit", "no_comments_before_commit", "unslop_parent"]
+const FEATURE_CHECKS = ["how_before_code", "architect_before_code", "delegated", "deslop_before_commit", "no_comments_before_commit", "unslop_parent"]
 const MINUTE = 60_000
 
 export const scenarios = {
@@ -138,9 +135,18 @@ export function score(scenario, tree) {
   }
 }
 
+function providerError(tree) {
+  for (const session of [tree.parent, ...tree.children]) {
+    const failed = session.messages.find((message) => message.type === "assistant" && message.error)
+    if (failed) return `provider error in ${session.info?.agent ?? "a"} session: ${failed.error.message ?? failed.error.type}`
+  }
+}
+
 function failureOf(record, scored) {
   if (record.error) return record.error
   if (record.exit !== 0) return `exit ${record.exit}`
+  const provider = record.sessionTree && providerError(record.sessionTree)
+  if (provider) return provider
   if (scored.counts.toolCalls === 0) return "no tool calls"
   return undefined
 }

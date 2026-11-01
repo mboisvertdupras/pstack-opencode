@@ -80,7 +80,7 @@ Each run starts its own server with the fixture as the seed and `~/.config/openc
 
 `scripts/routing-score.mjs` holds the scenario registry and the checks.
 
-- **Feature scenarios.** `feature-agent` runs under the `poteto-mode` agent, and `feature-slash` sends `/poteto-mode` under `build`. Both check that the parent loads `how` and `architect` or `arena` before its first `poteto-agent` delegation, that a `poteto-agent` wrote code, that `deslop` precedes every commit in its own session, that `no-comments` loads before the last commit, and that the parent loads `unslop`.
+- **Feature scenarios.** `feature-agent` runs under the `poteto-mode` agent, and `feature-slash` sends `/poteto-mode` under `build`. Both check that the parent loads `how` and `architect` or `arena` before its first `poteto-agent` delegation, that a `poteto-agent` wrote code, that `deslop` loads in each committing session before its first commit, that `no-comments` loads before the last commit, and that the parent loads `unslop`.
 - **Investigate.** The parent loads `how` and `unslop`.
 - **The `plain-build` gate.** A small change under `build` commits, gets no `pstack-mode` entry, and loads no hidden pstack skill.
 
