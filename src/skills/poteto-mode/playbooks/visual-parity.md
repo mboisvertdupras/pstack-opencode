@@ -8,4 +8,4 @@
 4. Verify each component against its baseline via image diff on the matching surface via the control skill. A nonzero diff is a fail. Investigate the pixel delta. Repeat per component until the diff is zero.
 5. Run **Opening a PR** per component or per safe batch.
 
-**Reply:** components migrated, the diff result for each, the baseline harness location, what's left.
+**Reply:** Load the `unslop` skill with the `skill` tool, then write components migrated, the diff result for each, the baseline harness location, what's left.

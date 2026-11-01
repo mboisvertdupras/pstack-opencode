@@ -152,4 +152,4 @@ Each live lane runs in its own git worktree at the PR head, created with `tools.
 <Docs to read before editing. Which PRs get the `how` and `interrogate` skills. The trail per the `show-me-your-work` skill.>
 ````
 
-**Reply:** the plan path, the PR ids with their dependencies and the review-gated set, what the prototypes proved and what stays unproven, and the check script's output.
+**Reply:** Load the `unslop` skill with the `skill` tool, then write the plan path, the PR ids with their dependencies and the review-gated set, what the prototypes proved and what stays unproven, and the check script's output.

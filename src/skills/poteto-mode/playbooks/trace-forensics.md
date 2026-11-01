@@ -11,4 +11,4 @@ Distinct from **Runtime forensics**, which instruments the live process. Here th
 5. If you have a paired capture, diff the before and after artifacts to confirm. Otherwise, mark the finding as the strongest hypothesis the artifact supports, not a confirmed cause.
 6. Hand back a cited diagnosis, no fix unless asked. Route to Bug fix or Perf issue once the cause is known. Throughput checkpoint stays one line: `throughput checkpoint: n/a, read-only forensics`.
 
-**Reply:** the artifact and format, the reduced finding, the source location, the artifact paths, and whether a paired capture confirmed it.
+**Reply:** Load the `unslop` skill with the `skill` tool, then write the artifact and format, the reduced finding, the source location, the artifact paths, and whether a paired capture confirmed it.
