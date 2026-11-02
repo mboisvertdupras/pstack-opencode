@@ -1,3 +1,4 @@
 node_modules/
 .DS_Store
 verify-evidence/
+.opencode/skills/verify-pstack/vendor/

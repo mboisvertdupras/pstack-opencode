@@ -5,7 +5,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
-import { decided, report, scenarios, selectScenarios, summarize } from "./routing-score.mjs"
+import { claudeModel, driveClaude, ensurePin, PIN } from "./claude-code.mjs"
+import { decided, MATRIX_CASES, report, scenarios, selectScenarios, summarize, treeOf } from "./routing-score.mjs"
 
 const HARNESS = join(import.meta.dirname, "harness.mjs")
 const SEED = join(import.meta.dirname, "..", "fixtures", "invoicing")
@@ -24,6 +25,7 @@ const { values: options } = parseArgs({
     out: { type: "string", default: join(import.meta.dirname, "..", "..", "..", "..", "verify-evidence", "routing") },
     timeout: { type: "string" },
     decide: { type: "string" },
+    cases: { type: "string" },
     rescore: { type: "string" },
   },
 })
@@ -31,7 +33,7 @@ const { values: options } = parseArgs({
 const drives = {
   run: ({ agent }, model, prompt) => ["run", "--agent", agent, "--model", model, prompt],
   command: ({ command, agent }, model, prompt) => ["command", command, "--agent", agent, "--model", model, prompt],
-  start: ({ agent }, model, prompt) => ["start", "--agent", agent, "--model", model, prompt],
+  start: ({ agent, command }, model, prompt) => ["start", ...(command ? ["--command", command] : []), "--agent", agent, "--model", model, prompt],
 }
 
 function harness(args, env) {
@@ -65,15 +67,8 @@ async function stopWhenDecided(sessionID, env, budgetMs) {
   return stoppedBy
 }
 
-async function runOne(scenario, index, { label, model, models, timeoutMs, decideMs, runsDir }) {
-  const spec = scenarios[scenario]
-  const id = `${scenario}-${index + 1}-${Date.now().toString(36)}`
-  const started = Date.now()
-  const deadline = started + (timeoutMs ?? spec.timeoutMs)
+async function driveOpenCode(spec, record, { model, models, decideMs }, started, deadline) {
   const remaining = () => String(Math.max(1000, deadline - Date.now()))
-  const record = { id, scenario, label, model, sessionTree: undefined, exit: undefined }
-  console.log(`start ${id}`)
-
   const up = await harness(["up"], { PSTACK_VERIFY_SEED: SEED, ...(models ? { PSTACK_VERIFY_MODELS: models } : {}) })
   const runDir = trailerField(up.out, "run")
   try {
@@ -98,10 +93,35 @@ async function runOne(scenario, index, { label, model, models, timeoutMs, decide
       if (down.code !== 0) record.error ??= `down exited ${down.code}: ${tail(down.out)}`
     } else record.error ??= `up printed no run folder: ${tail(up.out)}`
   }
+}
+
+async function driveClaudeCode(spec, record, { model, decideMs, pin }, started, deadline) {
+  const prompt = `/${spec.drive.command} ${spec.prompt}`
+  const budgetMs = Math.min(decideMs ?? spec.drive.decideMs, deadline - started)
+  const context = { prompt: spec.prompt, skills: spec.attaches, catalog: pin.catalog }
+  try {
+    const run = await driveClaude({ pin, seed: SEED, prompt, context, ...claudeModel(model), budgetMs })
+    Object.assign(record, { pin: { repo: PIN.repo, sha: pin.sha, version: pin.version }, catalog: pin.catalog, ...run })
+  } catch (error) {
+    record.error = error.message
+  }
+}
+
+const runtimes = { opencode: driveOpenCode, claude: driveClaudeCode }
+
+async function runOne(scenario, index, settings) {
+  const spec = scenarios[scenario]
+  const id = `${scenario}-${index + 1}-${Date.now().toString(36)}`
+  const started = Date.now()
+  const deadline = started + (settings.timeoutMs ?? spec.timeoutMs)
+  const record = { id, scenario, runtime: spec.runtime, label: settings.label, model: settings.model, exit: undefined }
+  console.log(`start ${id}`)
+  await runtimes[spec.runtime](spec, record, settings, started, deadline)
 
   record.durationMs = Date.now() - started
-  writeFileSync(join(runsDir, `${id}.json`), `${JSON.stringify(record)}\n`)
-  const sessions = record.sessionTree ? 1 + record.sessionTree.children.length : 0
+  writeFileSync(join(settings.runsDir, `${id}.json`), `${JSON.stringify(record)}\n`)
+  const tree = treeOf(record)
+  const sessions = tree ? 1 + tree.children.length : 0
   console.log(`done  ${id} exit=${record.exit} sessions=${sessions} ${Math.round(record.durationMs / 1000)}s${record.stoppedBy ? ` stopped_by=${record.stoppedBy}` : ""}${record.error ? ` error=${JSON.stringify(record.error)}` : ""}`)
   return record
 }
@@ -126,16 +146,26 @@ if (options.rescore) {
   finish(dir, records, records.length, { rescored: new Date().toISOString(), labels: [...new Set(records.map((record) => record.label))] })
 } else {
   if (!options.label) throw new Error("--label <arm> is required")
-  const names = selectScenarios(options.scenarios.split(",").map((name) => name.trim()))
+  const cases = options.cases?.split(",").map((name) => name.trim())
+  const unknownCases = (cases ?? []).filter((name) => !MATRIX_CASES.some((row) => row.id === name))
+  if (unknownCases.length) throw new Error(`unknown cases ${unknownCases.join(", ")}. Known: ${MATRIX_CASES.map((row) => row.id).join(", ")}`)
+  const names = selectScenarios(
+    options.scenarios.split(",").map((name) => name.trim()),
+    cases,
+  )
   const unknown = names.filter((name) => !scenarios[name])
   if (unknown.length) throw new Error(`unknown scenarios ${unknown.join(", ")}. Known: ${Object.keys(scenarios).join(", ")}`)
   const models = existsSync(options.models) ? resolve(options.models) : undefined
   if (!models) console.log(`warn  ${options.models} is missing, so delegates use the skill default models`)
+  const usesClaude = names.some((name) => scenarios[name].runtime === "claude")
+  if (usesClaude) claudeModel(options.model)
+  const pin = usesClaude ? ensurePin() : undefined
+  if (pin) console.log(`pin   pstack-claude ${pin.sha} (${pin.version}) at ${pin.plugin}`)
 
   const dir = join(resolve(options.out), options.label)
   const runsDir = join(dir, "runs")
   mkdirSync(runsDir, { recursive: true })
-  const settings = { label: options.label, model: options.model, models, timeoutMs: options.timeout ? Number(options.timeout) : undefined, decideMs: options.decide ? Number(options.decide) : undefined, runsDir }
+  const settings = { label: options.label, model: options.model, models, timeoutMs: options.timeout ? Number(options.timeout) : undefined, decideMs: options.decide ? Number(options.decide) : undefined, runsDir, pin }
   const jobs = Array.from({ length: Number(options.runs) }, (_, index) => names.map((name) => [name, index])).flat()
   const records = []
   let next = 0
@@ -147,5 +177,5 @@ if (options.rescore) {
       }
     }),
   )
-  finish(dir, records, jobs.length, { label: options.label, model: options.model, models, scenarios: names, runs: Number(options.runs) })
+  finish(dir, records, jobs.length, { label: options.label, model: options.model, models, scenarios: names, runs: Number(options.runs), ...(pin ? { pin: { repo: PIN.repo, sha: pin.sha, version: pin.version } } : {}) })
 }
