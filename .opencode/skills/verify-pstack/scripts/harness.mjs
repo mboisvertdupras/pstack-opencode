@@ -145,6 +145,17 @@ function flagValue(args, name, fallback) {
   return value
 }
 
+const createSession = (state, title, agent, model) =>
+  api(state, ["session.create", "--data", JSON.stringify({ title, agent, model: modelRef(model), location: { directory: state.proj } })])
+
+function saveTree(state, sessionID) {
+  const withEntries = (id) => ({ ...exportSession(state, id), entries: api(state, ["experimental.session.instructions.entry.list", "--param", `sessionID=${id}`]) })
+  const children = descendants(state, sessionID)
+  const tree = { parent: withEntries(sessionID), children: children.map((child) => withEntries(child.id)) }
+  const busy = [sessionInfo(state, sessionID), ...children].filter((info) => !isIdle(info)).length
+  return { tree, busy, file: save(state, `tree-${sessionID}.json`, tree) }
+}
+
 const commands = {
   async up() {
     mkdirSync(BASE, { recursive: true })
@@ -250,7 +261,7 @@ const commands = {
     const model = flagValue(args, "--model", MODEL)
     const [name, ...words] = args
     if (!name) die("usage: harness.mjs command <name> [--agent id] [--model provider/model#variant] <text...>")
-    const session = api(state, ["session.create", "--data", JSON.stringify({ title: `verify /${name}`, agent, model: modelRef(model), location: { directory: state.proj } })])
+    const session = createSession(state, `verify /${name}`, agent, model)
     api(state, ["session.command", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ name, text: words.join(" ") })])
     const idle = await waitIdle(state, session.id, Date.now() + TIMEOUT)
     const summary = summarize(exportSession(state, session.id))
@@ -263,12 +274,52 @@ const commands = {
     const state = loadState()
     if (!sessionID) die("usage: harness.mjs tree <sessionID>")
     const settled = await settle(state, sessionID, Date.now() + TIMEOUT)
-    const withEntries = (id) => ({ ...exportSession(state, id), entries: api(state, ["experimental.session.instructions.entry.list", "--param", `sessionID=${id}`]) })
-    const parent = withEntries(sessionID)
-    const children = descendants(state, sessionID).map((child) => withEntries(child.id))
-    const file = save(state, `tree-${sessionID}.json`, { parent, children })
-    console.log(`${settled ? "settled" : `timeout after ${TIMEOUT}ms`} ${1 + children.length} sessions\nproof   ${file}`)
+    const { tree, file } = saveTree(state, sessionID)
+    console.log(`${settled ? "settled" : `timeout after ${TIMEOUT}ms`} ${1 + tree.children.length} sessions\nproof   ${file}`)
     if (!settled) process.exit(TIMED_OUT)
+  },
+
+  async start(args) {
+    const state = loadState()
+    const agent = flagValue(args, "--agent", "build")
+    const model = flagValue(args, "--model", MODEL)
+    const text = args.join(" ")
+    if (!text) die("usage: harness.mjs start [--agent id] [--model provider/model#variant] <prompt...>")
+    const session = createSession(state, "verify start", agent, model)
+    api(state, ["session.prompt", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ text })])
+    const file = save(state, `start-${session.id}.txt`, `agent ${agent} model ${model}\n\n${text}\n`)
+    console.log(`session ${session.id}\nproof   ${file}`)
+  },
+
+  async snapshot([sessionID]) {
+    const state = loadState()
+    if (!sessionID) die("usage: harness.mjs snapshot <sessionID>")
+    const { tree, busy, file } = saveTree(state, sessionID)
+    console.log(`busy    ${busy} of ${1 + tree.children.length} sessions\nproof   ${file}`)
+  },
+
+  // A background child's report can wake an interrupted parent, so interrupt until the whole tree stays idle across a quiet window.
+  async stop([sessionID]) {
+    const state = loadState()
+    if (!sessionID) die("usage: harness.mjs stop <sessionID>")
+    const deadline = Date.now() + 60_000
+    let quietSince
+    while (Date.now() < deadline) {
+      const tree = [sessionInfo(state, sessionID), ...descendants(state, sessionID)]
+      const busy = tree.filter((info) => !isIdle(info)).reverse()
+      for (const info of busy) {
+        const result = api(state, ["session.interrupt", "--param", `sessionID=${info.id}`])
+        console.log(`interrupt ${info.id} agent=${info.agent} interrupted=${result?.interrupted}`)
+      }
+      if (busy.length) quietSince = undefined
+      else if (quietSince === undefined) quietSince = Date.now()
+      else if (Date.now() - quietSince >= 5000) {
+        console.log(`stopped ${tree.length} sessions idle`)
+        return
+      }
+      await sleep(1000)
+    }
+    die(`session tree ${sessionID} still busy 60s after interrupt`)
   },
 
   async export([sessionID]) {
@@ -347,7 +398,7 @@ const commands = {
 
 const [name, ...args] = process.argv.slice(2)
 if (!commands[name]) {
-  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
+  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | start [--agent a] [--model m] <prompt> | snapshot <sid> | stop <sid> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
   process.exit(name ? 1 : 0)
 }
 await commands[name](args)
