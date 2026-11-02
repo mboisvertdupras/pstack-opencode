@@ -53,11 +53,13 @@ function fakeContext({ modelsFile, sessions = {}, registered = [], storage = {} 
   return { ctx, state }
 }
 
-test("registers every bundled skill, hidden unless its frontmatter lets the model invoke it", async () => {
+test("registers every bundled skill and every poteto-mode playbook, hidden unless its frontmatter lets the model invoke it", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
   const folders = readdirSync(join(SRC, "skills")).sort()
-  assert.deepEqual(state.skills.map((skill) => skill.id), folders)
+  const stems = readdirSync(join(SRC, "skills", "poteto-mode", "playbooks")).map((name) => name.replace(/\.md$/, ""))
+  assert.deepEqual(state.skills.filter((skill) => skill.kind === "skill").map((skill) => skill.id), folders)
+  assert.deepEqual(state.skills.filter((skill) => skill.kind === "playbook").map((skill) => skill.id).sort(), stems.sort())
   const byId = Object.fromEntries(state.skills.map((skill) => [skill.id, skill]))
   assert.equal(byId["poteto-mode"].autoinvoke, false)
   assert.equal(byId["setup-pstack"].autoinvoke, true)
@@ -68,13 +70,14 @@ test("registers every bundled skill, hidden unless its frontmatter lets the mode
   }
 })
 
-test("adds a slash command for every skill except the principles", async () => {
+test("adds a slash command for every skill except the principles and the playbooks", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
   const names = state.commands.map((command) => command.name)
   assert.ok(names.includes("poteto-mode") && names.includes("how") && names.includes("deslop"))
   assert.equal(names.filter((name) => name.startsWith("principle-")).length, 0)
-  assert.equal(names.length, state.skills.length - state.skills.filter((skill) => skill.id.startsWith("principle-")).length)
+  assert.ok(!names.includes("bug-fix"))
+  assert.equal(names.length, state.skills.filter((skill) => skill.kind === "skill" && !skill.id.startsWith("principle-")).length)
 })
 
 test("/how attaches the how skill to the user's message", async () => {

@@ -48,14 +48,69 @@ function absoluteLinks(text, dir) {
   })
 }
 
+const PLAYBOOK_ENTRY = /^- \*\*(.+?)\.\*\* (.+)$/gm
+const ENTRY_ID = / ID: `([a-z0-9-]+)`\.$/
+const STEP = /^\d+\.\s/
+const NAMED_SKILL = /the `([a-z0-9-]+)` skill\b/g
+
+const kebab = (title) =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+
+export function playbookDescriptions(modeBody) {
+  const section = modeBody.slice(modeBody.indexOf("## Playbooks"))
+  return new Map(
+    [...section.matchAll(PLAYBOOK_ENTRY)].map(([, title, text]) => [text.match(ENTRY_ID)?.[1] ?? kebab(title), text.replace(ENTRY_ID, "")]),
+  )
+}
+
+export function playbookSkills(body) {
+  const lines = body.split("\n")
+  const start = lines.findIndex((line) => STEP.test(line))
+  if (start < 0) return []
+  const end = lines.findIndex((line, index) => index > start && /^\S/.test(line) && !STEP.test(line))
+  const steps = lines.slice(start, end < 0 ? undefined : end).join("\n")
+  return [...new Set([...steps.matchAll(NAMED_SKILL)].map(([, id]) => id))]
+}
+
+function readPlaybooks(modeDir) {
+  const dir = join(modeDir, "playbooks")
+  if (!existsSync(dir)) return []
+  const descriptions = playbookDescriptions(readFileSync(join(modeDir, "SKILL.md"), "utf8"))
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".md"))
+    .sort()
+    .map((name) => {
+      const id = name.slice(0, -".md".length)
+      const path = join(dir, name)
+      const body = readFileSync(path, "utf8")
+      const title = body.match(/^### (.+)$/m)?.[1] ?? id
+      const frame = `This is the \`${MODE_AGENT}\` ${title} playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.`
+      return {
+        kind: "playbook",
+        id,
+        name: id,
+        description: descriptions.get(id) ?? title,
+        path,
+        content: `${frame}\n\n${absoluteLinks(body, dir)}`,
+        autoinvoke: false,
+        skills: playbookSkills(body),
+      }
+    })
+}
+
 export function readSkills(skillsDir) {
-  return readdirSync(skillsDir)
+  const skills = readdirSync(skillsDir)
     .filter((id) => existsSync(join(skillsDir, id, "SKILL.md")))
     .sort()
     .map((id) => {
       const path = join(skillsDir, id, "SKILL.md")
       const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
       return {
+        kind: "skill",
         id,
         name: data.name || id,
         description: data.description ?? "",
@@ -64,6 +119,8 @@ export function readSkills(skillsDir) {
         autoinvoke: data["disable-model-invocation"] !== "true",
       }
     })
+  const ids = new Set(skills.map((skill) => skill.id))
+  return [...skills, ...readPlaybooks(join(skillsDir, MODE_AGENT)).filter((playbook) => !ids.has(playbook.id))]
 }
 
 export function commandDescription(description, max = 120) {

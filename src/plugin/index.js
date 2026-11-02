@@ -92,7 +92,7 @@ export default {
 
     await ctx.command.transform((editor) => {
       for (const skill of skills) {
-        if (skill.id.startsWith("principle-")) continue
+        if (skill.kind === "playbook" || skill.id.startsWith("principle-")) continue
         editor.add({
           name: skill.id,
           description: commandDescription(skill.description),
