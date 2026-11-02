@@ -230,8 +230,7 @@ export function actGate(session, event, skills) {
   const playbook = skills.get(session.playbook)
   const held = isCodeAction(event) ? "code" : isReadAction(event) && playbook?.gates.includes("reads") ? "reads" : undefined
   if (!held) return undefined
-  // `why` and `interrogate` run by spawning `general` subagents, so a `general` spawn waits only for the loads. Waiting for the runs too would deadlock.
-  const loadsOnly = event.tool === "subagent" && event.input.agent === "general"
+  const loadsOnly = event.tool === "subagent" && isEvidence(event)
   const unfinished = (id) => !session.loaded.includes(id) || (!loadsOnly && RAN[id] && !session.ran.includes(id))
   const missing = playbook?.requires.filter(unfinished) ?? []
   if (missing.length === 0) return undefined
