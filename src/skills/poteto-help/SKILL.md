@@ -116,7 +116,7 @@ Not in pstack:
 
 ## Playbooks and principles
 
-Playbooks are step lists inside `/poteto-mode`, not skills, so they have no slash command. Inside `/poteto-mode`, describing the task picks one, and these phrases name one directly:
+Playbooks are step lists inside `/poteto-mode`. They load as hidden skills, but they have no slash command. Inside `/poteto-mode`, describing the task picks one, and these phrases name one directly:
 
 - "babysit this pr" or "check on pr 123" runs Babysit. It drives the PR to merge-ready and stops there. It doesn't merge unless the user asks to merge, land, or ship.
 - "land the stack" runs Shipping.
