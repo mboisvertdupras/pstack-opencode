@@ -121,13 +121,21 @@ export default {
       guarded("context", (event) => reconcile(event.sessionID, event.agent)),
     )
 
-    await ctx.tool.hook("execute.before", (event) => {
-      const blocked = commitGate(gates.get(event.sessionID), event)
+    await ctx.tool.hook("execute.before", async (event) => {
+      let blocked
+      try {
+        blocked = commitGate(gates.get(event.sessionID), event)
+      } catch (error) {
+        console.error("pstack: execute.before hook failed", error)
+      }
       if (blocked) throw new Error(blocked)
     })
 
-    await ctx.tool.hook("execute.after", (event) => {
-      if (event.tool === "skill" && event.input.id === "deslop" && event.status === "completed") mark(event.sessionID, "deslop")
-    })
+    await ctx.tool.hook(
+      "execute.after",
+      guarded("execute.after", (event) => {
+        if (event.tool === "skill" && event.input.id === "deslop" && event.status === "completed") mark(event.sessionID, "deslop")
+      }),
+    )
   },
 }

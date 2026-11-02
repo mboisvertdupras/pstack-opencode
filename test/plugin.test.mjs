@@ -185,6 +185,21 @@ test("/poteto-mode gates commits in its build session", async () => {
   await state.hooks["execute.before"](shell("s2", "build", "git commit -m a"))
 })
 
+test("a plugin bug in the tool hooks never blocks a tool call", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  const errors = []
+  const original = console.error
+  console.error = (...args) => errors.push(args)
+  try {
+    await state.hooks["execute.before"]({ tool: "shell", sessionID: "s1", agent: "poteto-agent" })
+    await state.hooks["execute.after"]({ tool: "skill", sessionID: "s1", agent: "poteto-agent" })
+  } finally {
+    console.error = original
+  }
+  assert.equal(errors.length, 2)
+})
+
 test("the gate matches git commit behind global flags and nothing that only mentions it", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
