@@ -8,8 +8,8 @@ import plugin from "../src/plugin/index.js"
 const SRC = join(import.meta.dirname, "..", "src")
 
 // A fake OpenCode plugin context that records what the plugin registers and what it sends.
-function fakeContext({ modelsFile, sessions = {}, registered = [] } = {}) {
-  const state = { skills: [], commands: [], hooks: {}, prompts: [], entries: {}, storage: {} }
+function fakeContext({ modelsFile, sessions = {}, registered = [], storage = {} } = {}) {
+  const state = { skills: [], commands: [], hooks: {}, prompts: [], entries: {}, storage }
   const entriesOf = (sessionID) => (state.entries[sessionID] ??= {})
   const ctx = {
     options: { modelsFile: modelsFile ?? join(mkdtempSync(join(tmpdir(), "pstack-")), "missing.md") },
@@ -177,22 +177,55 @@ test("a build session commits freely", async () => {
   await state.hooks["execute.before"](shell("s1", "build", "git add -A && git commit -m a"))
 })
 
+const potetoMode = (state, sessionID) =>
+  state.commands.find((command) => command.name === "poteto-mode").execute({ sessionID, prompt: { text: "fix it" }, delivery: "steer" })
+
 test("/poteto-mode gates commits in its build session", async () => {
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } } })
   await plugin.setup(ctx)
-  await state.commands.find((command) => command.name === "poteto-mode").execute({ sessionID: "s1", prompt: { text: "fix it" }, delivery: "steer" })
+  await potetoMode(state, "s1")
   await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", "git commit -m a")))
   await state.hooks["execute.before"](shell("s2", "build", "git commit -m a"))
 })
 
+test("/poteto-mode keeps its build session in poteto mode, and other build sessions stay plain", async () => {
+  const sessions = { s1: { agent: "build" }, s2: { agent: "build" } }
+  const { ctx, state } = fakeContext({ sessions })
+  await plugin.setup(ctx)
+  await potetoMode(state, "s1")
+  await state.hooks.prompt({ sessionID: "s1", prompt: state.prompts[0] })
+  await state.hooks.prompt({ sessionID: "s2", prompt: { text: "hi" } })
+  assert.match(state.entries.s1["pstack-mode"], /poteto mode is on/)
+  assert.equal(state.entries.s2?.["pstack-mode"], undefined)
+
+  await state.hooks.context({ sessionID: "s1", agent: "build" })
+  assert.match(state.entries.s1["pstack-mode"], /poteto mode is on/)
+})
+
+test("a /poteto-mode session stays in poteto mode after the plugin restarts", async () => {
+  const sessions = { s1: { agent: "build" } }
+  const first = fakeContext({ sessions })
+  await plugin.setup(first.ctx)
+  await potetoMode(first.state, "s1")
+
+  const { ctx, state } = fakeContext({ sessions, storage: first.state.storage })
+  await plugin.setup(ctx)
+  await state.hooks.context({ sessionID: "s1", agent: "build" })
+  assert.match(state.entries.s1["pstack-mode"], /poteto mode is on/)
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", "git commit -m a")))
+})
+
 test("a plugin bug in the tool hooks never blocks a tool call", async () => {
   const { ctx, state } = fakeContext()
+  ctx.storage.get = async () => {
+    throw new Error("storage hiccup")
+  }
   await plugin.setup(ctx)
   const errors = []
   const original = console.error
   console.error = (...args) => errors.push(args)
   try {
-    await state.hooks["execute.before"]({ tool: "shell", sessionID: "s1", agent: "poteto-agent" })
+    await state.hooks["execute.before"](shell("s1", "poteto-agent", "git commit -m a"))
     await state.hooks["execute.after"]({ tool: "skill", sessionID: "s1", agent: "poteto-agent" })
   } finally {
     console.error = original

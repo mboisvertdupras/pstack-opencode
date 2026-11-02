@@ -47,10 +47,12 @@ If cost is the worry, say where the tokens go and how to spend fewer. pstack spe
 
 `/poteto-mode` matches the task to a playbook, copies the playbook's steps into the todo list, and runs the other skills as the steps need them. A step it skips stays in the list as `skip: <reason>`. A good prompt states the goal and how to tell it's done. It doesn't list skills, because a hand-written sequence tends to drop or reorder steps the playbook would keep. Read [`references/prompting.md`](references/prompting.md) before you help word one.
 
-Whether `/poteto-mode` stays on depends on how the user starts it:
+Either way of starting it keeps the mode on:
 
-- `/poteto-mode` attaches the skill to one message. It fades as the chat moves on.
-- The `poteto-mode` agent keeps it on. Press Tab to select it, or start with `opencode --agent poteto-mode`. The plugin attaches the skill to the first message and keeps a `pstack-mode` instruction entry, so the mode stays in context every turn and survives compaction until the user switches agents.
+- `/poteto-mode` attaches the skill to its message and keeps a `pstack-mode` instruction entry on that session for the rest of the session, whatever agent it runs under.
+- The `poteto-mode` agent attaches the skill to the first message and keeps the same entry until the user switches agents. Press Tab to select it, or start with `opencode --agent poteto-mode`.
+
+The entry keeps the mode in context every turn and through compaction.
 
 Mid-chat, "new task" makes the mode match a fresh playbook. `/poteto-mode` already uses `poteto-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with `agent: "poteto-agent"`.
 

@@ -27,6 +27,7 @@ Preconditions:
 - **Later message.** Run `$H run --agent poteto-mode --session <sid> "One word: are you still in poteto mode?"`. Then `$H export <sid>` shows `skills=[]` on the second `user` line.
 - **Switch away.** Run `$H run --agent build --session <sid> "Reply with only OK."`. Then `$H entries <sid>` no longer lists `pstack-mode`.
 - **Other agents.** Run `$H run "Reply with only OK."`. Then `$H entries <new sid>` lists no `pstack-mode` and `export` shows `skills=[]`.
+- **Slash command.** Run `$H command poteto-mode --agent build "Reply with only OK."`. Then `$H entries <sid>` lists `pstack-mode`, though the session runs `build`.
 
 ## Gotchas
 

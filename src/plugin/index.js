@@ -38,9 +38,13 @@ export default {
       return modelsEntry(modelsFile, models.text)
     }
 
+    const modeKey = (sessionID) => `mode/${sessionID}`
+    const commandedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
+
     const synced = new Map()
     const reconcileNow = async (sessionID, agent) => {
-      const want = { [MODELS_KEY]: readModels(), [MODE_KEY]: agent === MODE_AGENT ? modeEntry(ROOT) : undefined }
+      const mode = agent === MODE_AGENT || (await commandedMode(sessionID))
+      const want = { [MODELS_KEY]: readModels(), [MODE_KEY]: mode ? modeEntry(ROOT) : undefined }
       let have = synced.get(sessionID)
       if (!have) {
         const entries = unwrap(await ctx.session.instructions.entry.list({ sessionID })) ?? []
@@ -71,8 +75,7 @@ export default {
       }
     }
 
-    const gates = new Map()
-    const mark = (sessionID, flag) => gates.set(sessionID, { ...gates.get(sessionID), [flag]: true })
+    const deslopped = new Set()
 
     const shadowingPath = async (sessionID, skill) => {
       const session = unwrap(await ctx.session.get({ sessionID }))
@@ -93,7 +96,7 @@ export default {
           name: skill.id,
           description: commandDescription(skill.description),
           execute: async ({ sessionID, prompt, delivery }) => {
-            if (skill.id === MODE_AGENT) mark(sessionID, "mode")
+            if (skill.id === MODE_AGENT) await ctx.storage.set(modeKey(sessionID), true)
             const { text, attach } = commandPrompt(skill, prompt.text ?? "", await shadowingPath(sessionID, skill))
             const attached = attach ? [...(prompt.skills ?? []), { id: skill.id }] : prompt.skills
             await ctx.session.prompt({ ...prompt, sessionID, delivery, text, ...(attached ? { skills: attached } : {}) })
@@ -124,7 +127,7 @@ export default {
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        blocked = commitGate(gates.get(event.sessionID), event)
+        blocked = commitGate({ mode: await commandedMode(event.sessionID), deslop: deslopped.has(event.sessionID) }, event)
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }
@@ -134,7 +137,7 @@ export default {
     await ctx.tool.hook(
       "execute.after",
       guarded("execute.after", (event) => {
-        if (event.tool === "skill" && event.input.id === "deslop" && event.status === "completed") mark(event.sessionID, "deslop")
+        if (event.tool === "skill" && event.input.id === "deslop" && event.status === "completed") deslopped.add(event.sessionID)
       }),
     )
   },

@@ -83,7 +83,7 @@ export function commandPrompt(skill, text, shadowedBy) {
 
 export function modeEntry(root) {
   return [
-    "poteto mode is on. The user selected the `poteto-mode` agent, so every task in this session follows the `poteto-mode` skill.",
+    "poteto mode is on. The user turned it on, so every task in this session follows the `poteto-mode` skill.",
     `If the skill's instructions are not in this conversation, at the start or after compaction, load it with the \`skill\` tool (ID \`poteto-mode\`, file \`${join(root, "skills", "poteto-mode", "SKILL.md")}\`) before you act.`,
     'When the user says "new task", match a fresh playbook.',
   ].join(" ")
@@ -94,7 +94,7 @@ export function modelsEntry(file, text) {
   return `pstack per-role model choices, written by /setup-pstack to \`${file}\`. Each role line overrides that role's default model in pstack skills.\n\n${text}`
 }
 
-export function commitGate(session = {}, { tool, agent, input }) {
+export function commitGate(session, { tool, agent, input }) {
   if (tool !== "shell" || !GIT_COMMIT.test(input.command)) return undefined
   if (session.deslop || !(session.mode || MODE_AGENTS.includes(agent))) return undefined
   return COMMIT_GATE
