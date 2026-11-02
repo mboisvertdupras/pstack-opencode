@@ -71,6 +71,11 @@ test("a named skill must be an ID the skill tool can load", () => {
   ])
 })
 
+test("a poteto-mode playbook stem is a skill ID too", () => {
+  const exists = (path) => path.endsWith("src/skills/poteto-mode/playbooks/bug-fix.md")
+  assert.deepEqual(found("Load the `bug-fix` skill, not the `bug-fixes` skill.", SKILL, exists), ["skill-id the `bug-fixes` skill"])
+})
+
 test("a SKILL.md names its folder and has a description", () => {
   assert.deepEqual(
     lint([{ file: SKILL, text: "---\nname: what\n---\n\n# How\n" }]).map(({ line, rule, text }) => `${line} ${rule} ${text}`),

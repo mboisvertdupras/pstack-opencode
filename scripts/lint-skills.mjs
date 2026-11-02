@@ -67,7 +67,7 @@ function skillIdFindings(file, lines, exists) {
   const root = file.match(/^(.*\/skills)\//)?.[1] ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "src", "skills")
   return lines.flatMap(({ markdown }, index) =>
     [...(markdown ?? "").matchAll(/the `([a-z0-9-]+)` skill\b/g)]
-      .filter(([, id]) => !CATALOG_SKILLS.has(id) && !exists(join(root, id, "SKILL.md")))
+      .filter(([, id]) => !CATALOG_SKILLS.has(id) && !exists(join(root, id, "SKILL.md")) && !exists(join(root, "poteto-mode", "playbooks", `${id}.md`)))
       .map(([match]) => ({ file, line: index + 1, rule: "skill-id", text: match })),
   )
 }
