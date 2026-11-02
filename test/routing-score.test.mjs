@@ -192,6 +192,17 @@ test("matrix shorthands expand to registry rows under both entries", () => {
   assert.deepEqual(selectScenarios(["matrix@nope"]), ["matrix@nope"])
 })
 
+test("compare covers agent, slash and cc-slash, and a case filter keeps only those rows", () => {
+  assert.deepEqual(selectScenarios(["compare"], ["typo"]), ["matrix:typo@agent", "matrix:typo@slash", "matrix:typo@cc-slash"])
+  assert.deepEqual(selectScenarios(["matrix@cc"], ["how", "bug"]), ["matrix:bug@cc-slash", "matrix:how@cc-slash"])
+  assert.deepEqual(selectScenarios(["matrix:typo@build", "investigate"], ["bug"]), ["investigate"])
+  assert.equal(scenarios["matrix:typo@slash"].drive.command, "poteto-mode")
+})
+
+test("stay_out allows the poteto-mode attachment that /poteto-mode puts on the first message", () => {
+  assert.equal(check("matrix:typo@slash", tree(session("build", [edit()], { skills: ["poteto-mode"] })), "stay_out").pass, true)
+})
+
 test("an early-stopped matrix run is scored, and the table shows checks and the picked playbook", () => {
   const stopped = session("poteto-mode", [readPlaybook("feature"), edit()])
   stopped.messages.push({ type: "assistant", error: { type: "aborted", message: "Step interrupted" }, content: [] })

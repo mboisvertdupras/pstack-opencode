@@ -283,11 +283,13 @@ const commands = {
     const state = loadState()
     const agent = flagValue(args, "--agent", "build")
     const model = flagValue(args, "--model", MODEL)
+    const command = flagValue(args, "--command")
     const text = args.join(" ")
-    if (!text) die("usage: harness.mjs start [--agent id] [--model provider/model#variant] <prompt...>")
-    const session = createSession(state, "verify start", agent, model)
-    api(state, ["session.prompt", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ text })])
-    const file = save(state, `start-${session.id}.txt`, `agent ${agent} model ${model}\n\n${text}\n`)
+    if (!text) die("usage: harness.mjs start [--command name] [--agent id] [--model provider/model#variant] <prompt...>")
+    const session = createSession(state, command ? `verify /${command}` : "verify start", agent, model)
+    if (command) api(state, ["session.command", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ name: command, text })])
+    else api(state, ["session.prompt", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ text })])
+    const file = save(state, `start-${session.id}.txt`, `agent ${agent} model ${model}${command ? ` command /${command}` : ""}\n\n${text}\n`)
     console.log(`session ${session.id}\nproof   ${file}`)
   },
 
@@ -398,7 +400,7 @@ const commands = {
 
 const [name, ...args] = process.argv.slice(2)
 if (!commands[name]) {
-  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | start [--agent a] [--model m] <prompt> | snapshot <sid> | stop <sid> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
+  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | start [--command name] [--agent a] [--model m] <prompt> | snapshot <sid> | stop <sid> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
   process.exit(name ? 1 : 0)
 }
 await commands[name](args)
