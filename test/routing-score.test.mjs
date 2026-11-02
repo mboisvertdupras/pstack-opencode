@@ -199,6 +199,13 @@ test("skills_ran wants the skill's own work between its load and the first code 
   assert.equal(check("matrix:bug@agent", why, "skills_ran").pass, true)
 })
 
+test("a gate-rejected call is not the moment the session acted", () => {
+  const rejected = { ...edit(), state: { status: "error", input: {} } }
+  const run = tree(session("poteto-mode", [skill("feature"), rejected, skill("how"), delegate("explore"), edit()]))
+  assert.equal(check("matrix:feature@agent", run, "skills_ran").pass, true)
+  assert.equal(decided(tree(session("poteto-mode", [skill("feature"), rejected]))), false)
+})
+
 test("the matrix skills check fails when the skill loads only after the first edit", () => {
   const late = check("matrix:bug@agent", tree(session("poteto-mode", [read(), edit(), skill("how")])), "skills")
   assert.equal(late.pass, false)

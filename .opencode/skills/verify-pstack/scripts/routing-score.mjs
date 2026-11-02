@@ -28,6 +28,7 @@ function toolEvents(exported) {
           time,
           skill: part.name === "skill" ? (input.id ?? input.name) : undefined,
           loaded: part.name === "skill" && part.state?.status === "completed",
+          failed: part.state?.status === "error",
           delegate: part.name === "subagent" ? input.agent : undefined,
           shell: SHELL_TOOLS.has(part.name) ? (input.command ?? "") : undefined,
           edit: EDIT_TOOLS.has(part.name),
@@ -75,10 +76,11 @@ const OPENCODE_CATALOG = catalogOf(
 // Records saved before playbooks became skills carry a catalog with no `playbooks` list.
 const openedPlaybook = (event, catalog) => event.playbook ?? (event.loaded && catalog.playbooks?.includes(event.skill) ? event.skill : undefined)
 
-const changedFiles = (event) => event.edit || event.commit
+// A call a pstack gate rejected changed nothing, so it is not the moment the session acted.
+const changedFiles = (event) => !event.failed && (event.edit || event.commit)
 const codeAnchors = ({ parent, sessions }) => [
   ...sessions.flatMap((session) => session.events.filter(changedFiles)),
-  ...parent.events.filter((event) => event.delegate === "poteto-agent"),
+  ...parent.events.filter((event) => !event.failed && event.delegate === "poteto-agent"),
 ]
 
 export const decided = (tree) => codeAnchors({ parent: sessionView(tree.parent), sessions: [sessionView(tree.parent)] }).length > 0
