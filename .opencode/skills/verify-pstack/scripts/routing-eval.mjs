@@ -5,11 +5,13 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
-import { report, scenarios, summarize } from "./routing-score.mjs"
+import { decided, report, scenarios, selectScenarios, summarize } from "./routing-score.mjs"
 
 const HARNESS = join(import.meta.dirname, "harness.mjs")
 const SEED = join(import.meta.dirname, "..", "fixtures", "invoicing")
 const TIMED_OUT = 124
+const POLL_MS = 10_000
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const { values: options } = parseArgs({
   options: {
@@ -21,6 +23,7 @@ const { values: options } = parseArgs({
     models: { type: "string", default: join(homedir(), ".config", "opencode", "pstack-models.md") },
     out: { type: "string", default: join(import.meta.dirname, "..", "..", "..", "..", "verify-evidence", "routing") },
     timeout: { type: "string" },
+    decide: { type: "string" },
     rescore: { type: "string" },
   },
 })
@@ -28,6 +31,7 @@ const { values: options } = parseArgs({
 const drives = {
   run: ({ agent }, model, prompt) => ["run", "--agent", agent, "--model", model, prompt],
   command: ({ command, agent }, model, prompt) => ["command", command, "--agent", agent, "--model", model, prompt],
+  start: ({ agent }, model, prompt) => ["start", "--agent", agent, "--model", model, prompt],
 }
 
 function harness(args, env) {
@@ -43,7 +47,25 @@ function harness(args, env) {
 const trailerField = (out, name) => [...out.matchAll(new RegExp(`^${name} +(\\S+)`, "gm"))].at(-1)?.[1]
 const tail = (out) => out.trim().split("\n").slice(-5).join(" | ")
 
-async function runOne(scenario, index, { label, model, models, timeoutMs, runsDir }) {
+async function stopWhenDecided(sessionID, env, budgetMs) {
+  const budgetEnd = Date.now() + budgetMs
+  let stoppedBy
+  while (!stoppedBy) {
+    await sleep(Math.max(0, Math.min(POLL_MS, budgetEnd - Date.now())))
+    const snapshot = await harness(["snapshot", sessionID], env)
+    if (snapshot.code !== 0) throw new Error(`snapshot exited ${snapshot.code}: ${tail(snapshot.out)}`)
+    const tree = JSON.parse(readFileSync(trailerField(snapshot.out, "proof"), "utf8"))
+    const replied = tree.parent.messages.some((message) => message.type === "assistant")
+    if (decided(tree)) stoppedBy = "decision"
+    else if (replied && trailerField(snapshot.out, "busy") === "0") stoppedBy = "idle"
+    else if (Date.now() >= budgetEnd) stoppedBy = "budget"
+  }
+  const stop = await harness(["stop", sessionID], env)
+  if (stop.code !== 0) throw new Error(`stop exited ${stop.code}: ${tail(stop.out)}`)
+  return stoppedBy
+}
+
+async function runOne(scenario, index, { label, model, models, timeoutMs, decideMs, runsDir }) {
   const spec = scenarios[scenario]
   const id = `${scenario}-${index + 1}-${Date.now().toString(36)}`
   const started = Date.now()
@@ -62,6 +84,7 @@ async function runOne(scenario, index, { label, model, models, timeoutMs, runsDi
     else if (drive.code !== 0) record.error = `${spec.drive.via} exited ${drive.code}: ${tail(drive.out)}`
     const sessionID = trailerField(drive.out, "session")
     if (!sessionID || sessionID === "unknown") throw new Error(`no session id from ${spec.drive.via}: ${tail(drive.out)}`)
+    if (spec.drive.decideMs) record.stoppedBy = await stopWhenDecided(sessionID, { PSTACK_VERIFY_RUN: runDir }, Math.min(decideMs ?? spec.drive.decideMs, deadline - Date.now()))
     const tree = await harness(["tree", sessionID], { PSTACK_VERIFY_RUN: runDir, PSTACK_VERIFY_TIMEOUT: remaining() })
     const proof = trailerField(tree.out, "proof")
     if (proof && existsSync(proof)) record.sessionTree = JSON.parse(readFileSync(proof, "utf8"))
@@ -79,7 +102,7 @@ async function runOne(scenario, index, { label, model, models, timeoutMs, runsDi
   record.durationMs = Date.now() - started
   writeFileSync(join(runsDir, `${id}.json`), `${JSON.stringify(record)}\n`)
   const sessions = record.sessionTree ? 1 + record.sessionTree.children.length : 0
-  console.log(`done  ${id} exit=${record.exit} sessions=${sessions} ${Math.round(record.durationMs / 1000)}s${record.error ? ` error=${JSON.stringify(record.error)}` : ""}`)
+  console.log(`done  ${id} exit=${record.exit} sessions=${sessions} ${Math.round(record.durationMs / 1000)}s${record.stoppedBy ? ` stopped_by=${record.stoppedBy}` : ""}${record.error ? ` error=${JSON.stringify(record.error)}` : ""}`)
   return record
 }
 
@@ -103,7 +126,7 @@ if (options.rescore) {
   finish(dir, records, records.length, { rescored: new Date().toISOString(), labels: [...new Set(records.map((record) => record.label))] })
 } else {
   if (!options.label) throw new Error("--label <arm> is required")
-  const names = options.scenarios.split(",").map((name) => name.trim())
+  const names = selectScenarios(options.scenarios.split(",").map((name) => name.trim()))
   const unknown = names.filter((name) => !scenarios[name])
   if (unknown.length) throw new Error(`unknown scenarios ${unknown.join(", ")}. Known: ${Object.keys(scenarios).join(", ")}`)
   const models = existsSync(options.models) ? resolve(options.models) : undefined
@@ -112,7 +135,7 @@ if (options.rescore) {
   const dir = join(resolve(options.out), options.label)
   const runsDir = join(dir, "runs")
   mkdirSync(runsDir, { recursive: true })
-  const settings = { label: options.label, model: options.model, models, timeoutMs: options.timeout ? Number(options.timeout) : undefined, runsDir }
+  const settings = { label: options.label, model: options.model, models, timeoutMs: options.timeout ? Number(options.timeout) : undefined, decideMs: options.decide ? Number(options.decide) : undefined, runsDir }
   const jobs = Array.from({ length: Number(options.runs) }, (_, index) => names.map((name) => [name, index])).flat()
   const records = []
   let next = 0

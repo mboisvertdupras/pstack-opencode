@@ -1,6 +1,6 @@
 # invoicing
 
-A small shop's order-to-invoice service. Customers fill carts from a catalog, check out, and get an invoice by email. Node 22 or later, no dependencies.
+A small shop's order-to-invoice service. Customers fill carts from a catalog, check out, and recieve an invoice by email. Node 22 or later, no dependencies.
 
 ```sh
 npm test

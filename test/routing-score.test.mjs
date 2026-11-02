@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { report, score, summarize } from "../.opencode/skills/verify-pstack/scripts/routing-score.mjs"
+import { decided, report, scenarios, score, selectScenarios, summarize } from "../.opencode/skills/verify-pstack/scripts/routing-score.mjs"
 
 let clock = 0
 const tool = (name, input) => ({ type: "tool", name, state: { status: "completed", input }, time: { created: ++clock } })
@@ -8,7 +8,9 @@ const skill = (id) => tool("skill", { id })
 const delegate = (agent = "poteto-agent") => tool("subagent", { agent, description: "build it", prompt: "..." })
 const edit = () => tool("edit", { path: "src/money.js", oldString: "a", newString: "b" })
 const commit = (command = "git add src/money.js && git commit -qm 'Add discounts'") => tool("shell", { command })
-const read = () => tool("read", { path: "src/money.js" })
+const read = (path = "src/money.js") => tool("read", { path })
+const readPlaybook = (stem) => read(`/repo/src/skills/poteto-mode/playbooks/${stem}.md`)
+const todos = (...contents) => tool("todowrite", { todos: contents.map((content) => ({ content, status: "pending" })) })
 
 function session(agent, parts, { skills = [], entries } = {}) {
   return {
@@ -138,4 +140,69 @@ test("summarize scores clean runs, counts failures as errors, and prints the met
   assert.ok(lines.includes("gate=pass plain-build scored=1/1 committed=1/1 no_mode_entry=1/1 no_hidden_skill=1/1"))
   assert.ok(lines.includes("error d: no tool calls"))
   assert.equal(lines.at(-1), "routing_accuracy=0.75 errors=2 work=3/6 commits=1 toolcalls=7")
+})
+
+test("the matrix playbook check passes on a read of the expected playbook", () => {
+  const result = check("matrix:bug@agent", tree(session("poteto-mode", [readPlaybook("bug-fix"), skill("how")])), "playbook")
+  assert.equal(result.pass, true)
+  assert.equal(result.picked, "bug-fix")
+})
+
+test("the matrix playbook check passes when the first todowrite carries step 1, whitespace and backticks aside", () => {
+  const result = check("matrix:feature@build", tree(session("build", [todos("Load the how skill with the  skill tool\nand run it over the affected subsystem.", "Name the data shape")])), "playbook")
+  assert.deepEqual([result.pass, result.picked], [true, "feature"])
+})
+
+test("the matrix playbook check fails on a wrong pick and names it", () => {
+  const result = check("matrix:bug@agent", tree(session("poteto-mode", [readPlaybook("feature"), edit()])), "playbook")
+  assert.equal(result.pass, false)
+  assert.equal(result.picked, "feature")
+  assert.match(result.detail, /^picked feature;/)
+})
+
+test("the matrix skills check fails when the skill loads only after the first edit", () => {
+  const late = check("matrix:bug@agent", tree(session("poteto-mode", [read(), edit(), skill("how")])), "skills")
+  assert.equal(late.pass, false)
+  assert.match(late.detail, /first loads how$/)
+  const childEdit = session("general", [edit()])
+  assert.equal(check("matrix:bug@agent", tree(session("poteto-mode", [delegate("general"), skill("why")]), childEdit), "skills").pass, false)
+  assert.equal(check("matrix:bug@agent", tree(session("poteto-mode", [skill("tdd"), skill("how"), delegate()])), "skills").pass, true)
+})
+
+test("stay_out fails on a hidden skill or a playbook read, and ignores the mode's own attachment", () => {
+  assert.deepEqual(check("matrix:typo@build", tree(session("build", [skill("how"), edit()])), "stay_out").pass, false)
+  assert.deepEqual(check("matrix:typo@build", tree(session("build", [readPlaybook("feature"), edit()])), "stay_out").pass, false)
+  assert.equal(check("matrix:typo@build", tree(session("build", [skill("deslop"), edit(), commit()])), "stay_out").pass, true)
+  assert.equal(check("matrix:typo@agent", tree(session("poteto-mode", [edit()], { skills: ["poteto-mode"] })), "stay_out").pass, true)
+  assert.equal(check("matrix:typo@build", tree(session("build", [edit()], { skills: ["poteto-mode"] })), "stay_out").pass, false)
+})
+
+test("decided fires on the parent's first edit or poteto-agent delegation only", () => {
+  assert.equal(decided(tree(session("poteto-mode", [read(), skill("how")]))), false)
+  assert.equal(decided(tree(session("poteto-mode", [delegate("explore")]), session("explore", [edit()]))), false)
+  assert.equal(decided(tree(session("poteto-mode", [delegate()]))), true)
+  assert.equal(decided(tree(session("build", [edit()]))), true)
+  assert.equal(decided(tree(session("poteto-mode", [tool("shell", { command: "git mv src/cart src/basket" }), commit()]))), true)
+})
+
+test("matrix shorthands expand to registry rows under both entries", () => {
+  assert.equal(selectScenarios(["matrix"]).length, 22)
+  assert.ok(selectScenarios(["matrix@build"]).every((name) => scenarios[name].drive.agent === "build"))
+  assert.deepEqual(selectScenarios(["matrix:typo@agent", "investigate"]), ["matrix:typo@agent", "investigate"])
+  assert.deepEqual(selectScenarios(["matrix@nope"]), ["matrix@nope"])
+})
+
+test("an early-stopped matrix run is scored, and the table shows checks and the picked playbook", () => {
+  const stopped = session("poteto-mode", [readPlaybook("feature"), edit()])
+  stopped.messages.push({ type: "assistant", error: { type: "aborted", message: "Step interrupted" }, content: [] })
+  const summary = summarize([
+    { id: "a", scenario: "matrix:bug@agent", exit: 0, stoppedBy: "decision", durationMs: 1, sessionTree: tree(stopped) },
+    { id: "b", scenario: "matrix:question@build", exit: 0, stoppedBy: "idle", durationMs: 1, sessionTree: tree(session("build", [])) },
+  ])
+  assert.equal(summary.errors, 0)
+  const lines = report(summary).split("\n")
+  assert.match(lines[0], /^case\s+\| agent\s+\| build$/)
+  assert.match(lines[1], /^bug\s+\| playbook 0\/1 {2}skills 0\/1 {2}picked feature\s+\| -$/)
+  assert.match(lines[2], /^question\s+\| -\s+\| stay_out 1\/1 {2}picked none$/)
+  assert.equal(lines.at(-1), "routing_accuracy=0.33 errors=0 work=2/2 commits=0 toolcalls=2")
 })

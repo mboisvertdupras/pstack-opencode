@@ -1,8 +1,11 @@
+import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { readSkills } from "../../../../src/plugin/lib.js"
+import { MODE_AGENT, readSkills } from "../../../../src/plugin/lib.js"
 
+const SKILLS = join(import.meta.dirname, "..", "..", "..", "..", "src", "skills")
+const PLAYBOOKS = join(SKILLS, MODE_AGENT, "playbooks")
 const HIDDEN = new Set(
-  readSkills(join(import.meta.dirname, "..", "..", "..", "..", "src", "skills"))
+  readSkills(SKILLS)
     .filter((skill) => !skill.autoinvoke)
     .map((skill) => skill.id),
 )
@@ -28,12 +31,44 @@ function toolEvents(exported) {
           delegate: part.name === "subagent" ? input.agent : undefined,
           edit: EDIT_TOOLS.has(part.name),
           commit: SHELL_TOOLS.has(part.name) && GIT_COMMIT.test(input.command ?? ""),
+          playbook: part.name === "read" ? playbookOf(input.path ?? input.filePath) : undefined,
+          todos: part.name === "todowrite" ? (input.todos ?? []).map((todo) => normalize(todo.content ?? "")) : undefined,
         }
       })
   })
 }
 
 const sessionView = (exported) => ({ exported, agent: exported.info?.agent, events: toolEvents(exported) })
+
+const playbookOf = (path) => path?.match(/poteto-mode\/playbooks\/([\w-]+)\.md$/)?.[1]
+const normalize = (text) => text.replace(/[`*_]/g, "").replace(/\s+/g, " ").trim().toLowerCase()
+const STEP_PREFIX = 60
+
+function stepOnes() {
+  return readdirSync(PLAYBOOKS)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => [name.slice(0, -3), readFileSync(join(PLAYBOOKS, name), "utf8").match(/^1\.\s+(.+)$/m)?.[1]])
+    .filter(([, step]) => step)
+    .map(([stem, step]) => [stem, normalize(step).slice(0, STEP_PREFIX)])
+}
+
+const changedFiles = (event) => event.edit || event.commit
+const codeAnchors = ({ parent, sessions }) => [
+  ...sessions.flatMap((session) => session.events.filter(changedFiles)),
+  ...parent.events.filter((event) => event.delegate === "poteto-agent"),
+]
+
+export const decided = (tree) => codeAnchors({ parent: sessionView(tree.parent), sessions: [sessionView(tree.parent)] }).length > 0
+
+const entryAttachments = (parent) => new Set(parent.agent === MODE_AGENT ? [MODE_AGENT] : [])
+
+function hiddenLoads(sessions, allowed = new Set()) {
+  const ids = sessions.flatMap(({ exported, events }) => [
+    ...events.map((event) => event.skill),
+    ...exported.messages.filter((message) => message.type === "user").flatMap((message) => (message.skills ?? []).map((skill) => skill.id)),
+  ])
+  return [...new Set(ids.filter((id) => HIDDEN.has(id) && !allowed.has(id)))]
+}
 
 function loadedBeforeCode(ids) {
   return ({ parent }) => {
@@ -104,23 +139,109 @@ export const checks = {
   },
 
   no_hidden_skill({ sessions }) {
-    const ids = sessions.flatMap(({ exported, events }) => [
-      ...events.map((event) => event.skill),
-      ...exported.messages.filter((message) => message.type === "user").flatMap((message) => (message.skills ?? []).map((skill) => skill.id)),
-    ])
-    const hidden = [...new Set(ids.filter((id) => HIDDEN.has(id)))]
+    const hidden = hiddenLoads(sessions)
     return { pass: hidden.length === 0, detail: hidden.length ? `loaded ${hidden.join(", ")}` : "none" }
+  },
+
+  playbook({ parent }, { expect }) {
+    const read = parent.events.map((event) => event.playbook).filter(Boolean)
+    const todos = parent.events.find((event) => event.todos)?.todos ?? []
+    const listed = stepOnes()
+      .filter(([, step]) => todos.some((todo) => todo.includes(step)))
+      .map(([stem]) => stem)
+    const picked = read[0] ?? listed[0] ?? null
+    const pass = expect.playbook === null ? picked === null : read.includes(expect.playbook) || listed.includes(expect.playbook)
+    return { pass, picked, detail: `picked ${picked ?? "none"}; read ${read.join(", ") || "none"}; todos match ${listed.join(", ") || "none"}` }
+  },
+
+  skills(view, { expect }) {
+    const anchor = Math.min(...codeAnchors(view).map((event) => event.time))
+    const loads = view.sessions
+      .flatMap((session) => session.events)
+      .filter((event) => event.skill)
+      .sort((a, b) => a.time - b.time)
+    const hit = loads.find((event) => expect.skills.includes(event.skill) && event.time < anchor)
+    const first = loads.slice(0, 3).map((event) => event.skill)
+    const when = Number.isFinite(anchor) ? "before the first edit or poteto-agent delegation" : "with no edit or poteto-agent delegation"
+    return { pass: Boolean(hit), detail: `${hit ? `${hit.skill} loaded ${when}` : `none of ${expect.skills.join(", ")} loaded ${when}`}; first loads ${first.join(", ") || "none"}` }
+  },
+
+  stay_out({ parent, sessions }) {
+    const read = [...new Set(sessions.flatMap((session) => session.events.map((event) => event.playbook)).filter(Boolean))]
+    const hidden = hiddenLoads(sessions, entryAttachments(parent))
+    return { pass: read.length === 0 && hidden.length === 0, picked: read[0] ?? null, detail: `playbooks ${read.join(", ") || "none"}; hidden skills ${hidden.join(", ") || "none"}` }
   },
 }
 
 const FEATURE_CHECKS = ["how_before_code", "architect_before_code", "delegated", "deslop_before_commit", "no_comments_before_commit", "unslop_parent"]
 const MINUTE = 60_000
 
+export const MATRIX_CASES = [
+  {
+    id: "bug",
+    prompt: `Customers report that for some multi-item carts with tax, the total in the invoice email is one cent off the invoice. Find and fix it. ${AUTONOMOUS}`,
+    expect: { playbook: "bug-fix", skills: ["how", "why", "tdd"] },
+  },
+  {
+    id: "perf",
+    prompt: `At month end, issuing and listing invoices for a customer with thousands of orders takes far too long. Make it faster. ${AUTONOMOUS}`,
+    expect: { playbook: "perf-issue", skills: ["how"] },
+  },
+  {
+    id: "refactor",
+    prompt: `Rename the cart module's Cart concept to Basket everywhere (module, functions, record fields, ids, and tests), with no behavior change. ${AUTONOMOUS}`,
+    expect: { playbook: "refactoring", skills: ["how"] },
+  },
+  { id: "feature", prompt: FEATURE_PROMPT, expect: { playbook: "feature", skills: ["how", "architect", "arena"] } },
+  { id: "how", prompt: INVESTIGATE_PROMPT, expect: { playbook: "investigation", skills: ["how"] } },
+  {
+    id: "why",
+    prompt: "Why does billing round tax per line instead of on the invoice total, and should it? Cite the code. Answer without asking questions.",
+    expect: { playbook: "investigation", skills: ["why", "how"] },
+  },
+  {
+    id: "plan",
+    prompt: "Plan moving storage from JSON files to SQLite across several PRs. Don't implement anything. Answer without asking questions.",
+    expect: { playbook: "multi-phase-plan" },
+  },
+  { id: "review", prompt: "Adversarially review the checkout module and try to break it. Answer without asking questions.", expect: { skills: ["interrogate"] } },
+  {
+    id: "prototype",
+    prompt: `Sketch two ways to show discounts in the invoice email so I can pick one. ${AUTONOMOUS}`,
+    expect: { playbook: "prototype" },
+  },
+  { id: "typo", prompt: `Fix the typo "recieve" in the README. ${AUTONOMOUS}`, expect: { stayOut: true } },
+  { id: "question", prompt: "What command runs the tests here?", expect: { stayOut: true } },
+]
+export const MATRIX_ENTRIES = { agent: MODE_AGENT, build: "build" }
+const DECIDE_MS = 4 * MINUTE
+
+const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
+
 export const scenarios = {
   "feature-agent": { role: "metric", drive: { via: "run", agent: "poteto-mode" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
   "feature-slash": { role: "metric", drive: { via: "command", command: "poteto-mode", agent: "build" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
   investigate: { role: "metric", drive: { via: "run", agent: "poteto-mode" }, prompt: INVESTIGATE_PROMPT, timeoutMs: 20 * MINUTE, checks: ["how_loaded", "unslop_parent"] },
   "plain-build": { role: "gate", drive: { via: "run", agent: "build" }, prompt: PLAIN_PROMPT, timeoutMs: 10 * MINUTE, checks: ["committed", "no_mode_entry", "no_hidden_skill"] },
+  ...Object.fromEntries(
+    MATRIX_CASES.flatMap(({ id, prompt, expect }) =>
+      Object.entries(MATRIX_ENTRIES).map(([entry, agent]) => [
+        `matrix:${id}@${entry}`,
+        { role: "metric", matrix: { case: id, entry }, drive: { via: "start", agent, decideMs: DECIDE_MS }, prompt, expect, timeoutMs: 12 * MINUTE, checks: matrixChecks(expect) },
+      ]),
+    ),
+  ),
+}
+
+export function selectScenarios(names) {
+  return names.flatMap((name) => {
+    const [group, entry] = name.split("@")
+    if (group !== "matrix" || name.includes(":")) return [name]
+    const rows = Object.entries(scenarios)
+      .filter(([, spec]) => spec.matrix && (!entry || spec.matrix.entry === entry))
+      .map(([id]) => id)
+    return rows.length ? rows : [name]
+  })
 }
 
 export function score(scenario, tree) {
@@ -130,14 +251,16 @@ export function score(scenario, tree) {
   const view = { parent: sessions[0], children: sessions.slice(1), sessions }
   const events = sessions.flatMap((session) => session.events)
   return {
-    checks: Object.fromEntries(spec.checks.map((name) => [name, checks[name](view)])),
+    checks: Object.fromEntries(spec.checks.map((name) => [name, checks[name](view, spec)])),
     counts: { commits: events.filter((event) => event.commit).length, toolCalls: events.length, sessions: sessions.length },
   }
 }
 
-function providerError(tree) {
+const deliberateAbort = (message, stopped) => stopped && message.error.type === "aborted"
+
+function providerError(tree, stopped) {
   for (const session of [tree.parent, ...tree.children]) {
-    const failed = session.messages.find((message) => message.type === "assistant" && message.error)
+    const failed = session.messages.find((message) => message.type === "assistant" && message.error && !deliberateAbort(message, stopped))
     if (failed) return `provider error in ${session.info?.agent ?? "a"} session: ${failed.error.message ?? failed.error.type}`
   }
 }
@@ -145,16 +268,16 @@ function providerError(tree) {
 function failureOf(record, scored) {
   if (record.error) return record.error
   if (record.exit !== 0) return `exit ${record.exit}`
-  const provider = record.sessionTree && providerError(record.sessionTree)
+  const provider = record.sessionTree && providerError(record.sessionTree, Boolean(record.stoppedBy))
   if (provider) return provider
-  if (scored.counts.toolCalls === 0) return "no tool calls"
+  if (scored.counts.toolCalls === 0 && !scenarios[record.scenario].expect?.stayOut) return "no tool calls"
   return undefined
 }
 
 export function summarize(records, planned = records.length) {
   const runs = records.map((record) => {
     const scored = record.sessionTree ? score(record.scenario, record.sessionTree) : { checks: {}, counts: { commits: 0, toolCalls: 0, sessions: 0 } }
-    return { id: record.id, scenario: record.scenario, exit: record.exit, durationMs: record.durationMs, error: failureOf(record, scored), ...scored }
+    return { id: record.id, scenario: record.scenario, exit: record.exit, durationMs: record.durationMs, stoppedBy: record.stoppedBy, error: failureOf(record, scored), ...scored }
   })
   const clean = runs.filter((run) => !run.error)
   const results = clean.filter((run) => scenarios[run.scenario].role === "metric").flatMap((run) => Object.values(run.checks))
@@ -182,9 +305,35 @@ export function summarize(records, planned = records.length) {
   }
 }
 
+function matrixCell(runs) {
+  const spec = scenarios[runs[0].scenario]
+  const clean = runs.filter((run) => !run.error)
+  const passes = spec.checks.map((name) => `${name} ${clean.filter((run) => run.checks[name].pass).length}/${clean.length}`)
+  const picked = clean.map((run) => (run.checks.playbook ?? run.checks.stay_out)?.picked).filter((stem) => stem !== undefined)
+  const errors = runs.length - clean.length
+  return [...passes, ...(picked.length ? [`picked ${picked.map((stem) => stem ?? "none").join(",")}`] : []), ...(errors ? [`errors ${errors}`] : [])].join("  ")
+}
+
+function matrixTable(runs) {
+  const byCell = Map.groupBy(
+    runs.filter((run) => scenarios[run.scenario].matrix),
+    (run) => run.scenario,
+  )
+  if (byCell.size === 0) return []
+  const entries = Object.keys(MATRIX_ENTRIES)
+  const rows = MATRIX_CASES.filter(({ id }) => entries.some((entry) => byCell.has(`matrix:${id}@${entry}`))).map(({ id }) => [
+    id,
+    ...entries.map((entry) => (byCell.has(`matrix:${id}@${entry}`) ? matrixCell(byCell.get(`matrix:${id}@${entry}`)) : "-")),
+  ])
+  const table = [["case", ...entries], ...rows]
+  const widths = table[0].map((_, column) => Math.max(...table.map((row) => row[column].length)))
+  return table.map((row) => row.map((cell, column) => cell.padEnd(widths[column])).join("  | ").trimEnd())
+}
+
 export function report(summary) {
-  const lines = []
+  const lines = matrixTable(summary.runs)
   for (const [scenario, row] of Object.entries(summary.table)) {
+    if (scenarios[scenario].matrix) continue
     lines.push(`${scenario}  runs=${row.runs} scored=${row.scored}`)
     for (const [name, count] of Object.entries(row.checks)) lines.push(`  ${name.padEnd(28)}${count}/${row.scored}`)
   }
