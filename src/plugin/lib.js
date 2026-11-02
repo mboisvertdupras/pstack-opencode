@@ -159,8 +159,41 @@ export const isCommit = ({ tool, input }) => tool === "shell" && GIT_COMMIT.test
 
 export function commitGate(session, event) {
   if (!isCommit(event)) return undefined
-  if (session.deslop || !(session.mode || MODE_AGENTS.includes(event.agent))) return undefined
+  if (session.loaded.includes("deslop") || !(session.mode || MODE_AGENTS.includes(event.agent))) return undefined
   return COMMIT_GATE
+}
+
+const CODE_TOOLS = new Set(["edit", "write", "apply_patch", "patch", "multiedit"])
+const CODE_AGENTS = new Set(["poteto-agent", "general"])
+const SKILL_FILE = /\/skills\/(?:poteto-mode\/playbooks\/([a-z0-9-]+)\.md|([a-z0-9-]+)\/SKILL\.md)$/
+
+export const isCodeAction = ({ tool, input }) => CODE_TOOLS.has(tool) || (tool === "subagent" && CODE_AGENTS.has(input.agent))
+
+export function loadedSkill({ tool, input, status }, skills) {
+  if (status !== "completed") return undefined
+  if (tool === "skill") return input.id
+  if (tool !== "read") return undefined
+  const [, playbook, skill] = input.path?.match(SKILL_FILE) ?? []
+  const id = playbook ?? skill
+  return skills.has(id) ? id : undefined
+}
+
+export function withLoad(record, id, skills) {
+  const session = record ?? { loaded: [] }
+  if (skills.get(id)?.kind === "playbook") return session.playbook === id ? session : { ...session, playbook: id }
+  return session.loaded.includes(id) ? session : { ...session, loaded: [...session.loaded, id] }
+}
+
+const listed = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`)
+
+export function actGate(session, event, skills) {
+  if (!isCodeAction(event) || !(session.mode || event.agent === MODE_AGENT)) return undefined
+  const playbook = skills.get(session.playbook)
+  const missing = playbook?.requires.filter((id) => !session.loaded.includes(id)) ?? []
+  if (missing.length === 0) return undefined
+  const [first, ...rest] = missing.map((id) => `\`${id}\``)
+  const one = rest.length === 0
+  return `pstack: the ${playbook.title} playbook loads the ${listed([first, ...rest])} skill${one ? "" : "s"} before any code change, and ${one ? "it is" : "they are"} not loaded yet. Load ${first} with the \`skill\` tool and run it, ${rest.map((id) => `then ${id}, `).join("")}then retry this call.`
 }
 
 export function entryOps(want, have) {

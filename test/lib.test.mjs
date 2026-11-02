@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { commandDescription, commandPrompt, entryOps, parseFrontmatter, playbookDescriptions, playbookSkills, readSkills } from "../src/plugin/lib.js"
+import { actGate, commandDescription, commandPrompt, entryOps, loadedSkill, parseFrontmatter, playbookDescriptions, playbookSkills, readSkills, withLoad } from "../src/plugin/lib.js"
 
 test("frontmatter reads double-quoted, single-quoted, plain, and folded descriptions", () => {
   const quoted = parseFrontmatter('---\nname: how\ndescription: "Use for \\"how does X work\\"."\ndisable-model-invocation: true\n---\n\n# How\n')
@@ -148,4 +148,40 @@ test("every shipped playbook registers under its stem with its Playbooks list en
     "perf-issue": ["benchmark-checklist", "how"],
     refactoring: ["how"],
   })
+})
+
+const CATALOG = new Map([
+  ["perf", { kind: "playbook", id: "perf", title: "Perf issue", requires: ["bench", "how", "why"] }],
+  ["notes", { kind: "playbook", id: "notes", title: "Notes", requires: [] }],
+  ["how", { kind: "skill", id: "how" }],
+])
+const editBy = (agent) => ({ tool: "edit", agent, input: { path: "a.js" } })
+
+test("the act gate names every missing required skill in order, and only for code actions in poteto mode", () => {
+  const session = { mode: true, playbook: "perf", loaded: ["how"] }
+  assert.equal(
+    actGate(session, editBy("build"), CATALOG),
+    "pstack: the Perf issue playbook loads the `bench` and `why` skills before any code change, and they are not loaded yet. Load `bench` with the `skill` tool and run it, then `why`, then retry this call.",
+  )
+  assert.match(actGate({ ...session, loaded: [] }, editBy("build"), CATALOG), /the `bench`, `how` and `why` skills.*Load `bench` with the `skill` tool and run it, then `how`, then `why`, then retry/)
+  assert.equal(actGate({ ...session, loaded: ["bench", "how", "why"] }, editBy("build"), CATALOG), undefined)
+  assert.equal(actGate({ ...session, mode: false }, editBy("build"), CATALOG), undefined)
+  assert.ok(actGate({ ...session, mode: false }, editBy("poteto-mode"), CATALOG))
+  assert.equal(actGate(session, { tool: "subagent", agent: "build", input: { agent: "explore" } }, CATALOG), undefined)
+  assert.equal(actGate(session, { tool: "shell", agent: "build", input: { command: "echo > a.js" } }, CATALOG), undefined)
+  assert.equal(actGate({ ...session, playbook: "notes" }, editBy("build"), CATALOG), undefined)
+  assert.equal(actGate({ ...session, playbook: "gone" }, editBy("build"), CATALOG), undefined)
+})
+
+test("a completed skill load or pstack skill file read is a load, and a newer playbook replaces the older one", () => {
+  assert.equal(loadedSkill({ tool: "skill", input: { id: "how" }, status: "completed" }, CATALOG), "how")
+  assert.equal(loadedSkill({ tool: "skill", input: { id: "how" }, status: "error" }, CATALOG), undefined)
+  assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/poteto-mode/playbooks/perf.md" }, status: "completed" }, CATALOG), "perf")
+  assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/how/SKILL.md" }, status: "completed" }, CATALOG), "how")
+  assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/mine/SKILL.md" }, status: "completed" }, CATALOG), undefined)
+
+  const started = withLoad(undefined, "how", CATALOG)
+  assert.deepEqual(started, { loaded: ["how"] })
+  assert.equal(withLoad(started, "how", CATALOG), started)
+  assert.deepEqual(withLoad(withLoad(started, "perf", CATALOG), "notes", CATALOG), { loaded: ["how"], playbook: "notes" })
 })

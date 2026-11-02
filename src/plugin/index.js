@@ -6,14 +6,18 @@ import {
   MODE_AGENT,
   MODE_KEY,
   MODELS_KEY,
+  actGate,
   commandDescription,
   commandPrompt,
   commitGate,
   entryOps,
+  isCodeAction,
   isCommit,
+  loadedSkill,
   modeEntry,
   modelsEntry,
   readSkills,
+  withLoad,
 } from "./lib.js"
 
 const ROOT = dirname(dirname(realpathSync(fileURLToPath(import.meta.url))))
@@ -42,6 +46,30 @@ export default {
     const modeKey = (sessionID) => `mode/${sessionID}`
     const commandedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
 
+    const inOrder = () => {
+      const queues = new Map()
+      return (sessionID, task) => {
+        const next = (queues.get(sessionID) ?? Promise.resolve()).then(task)
+        queues.set(sessionID, next.catch(() => {}))
+        return next
+      }
+    }
+
+    const catalog = new Map(skills.map((skill) => [skill.id, skill]))
+    const skillsKey = (sessionID) => `skills/${sessionID}`
+    const skillsInOrder = inOrder()
+    const sessionState = (sessionID) =>
+      skillsInOrder(sessionID, async () => {
+        const { playbook, loaded = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
+        return { mode: await commandedMode(sessionID), playbook, loaded }
+      })
+    const recordLoad = (sessionID, id) =>
+      skillsInOrder(sessionID, async () => {
+        const before = await ctx.storage.get(skillsKey(sessionID))
+        const after = withLoad(before, id, catalog)
+        if (after !== before) await ctx.storage.set(skillsKey(sessionID), after)
+      })
+
     const synced = new Map()
     const reconcileNow = async (sessionID, agent) => {
       const mode = agent === MODE_AGENT || (await commandedMode(sessionID))
@@ -62,12 +90,8 @@ export default {
         }
       }
     }
-    const queues = new Map()
-    const reconcile = (sessionID, agent) => {
-      const next = (queues.get(sessionID) ?? Promise.resolve()).then(() => reconcileNow(sessionID, agent))
-      queues.set(sessionID, next.catch(() => {}))
-      return next
-    }
+    const reconcileInOrder = inOrder()
+    const reconcile = (sessionID, agent) => reconcileInOrder(sessionID, () => reconcileNow(sessionID, agent))
     const guarded = (name, hook) => async (event) => {
       try {
         await hook(event)
@@ -75,8 +99,6 @@ export default {
         console.error(`pstack: ${name} hook failed`, error)
       }
     }
-
-    const deslopped = new Set()
 
     const shadowingPath = async (sessionID, skill) => {
       const session = unwrap(await ctx.session.get({ sessionID }))
@@ -128,7 +150,10 @@ export default {
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        if (isCommit(event)) blocked = commitGate({ mode: await commandedMode(event.sessionID), deslop: deslopped.has(event.sessionID) }, event)
+        if (isCodeAction(event) || isCommit(event)) {
+          const session = await sessionState(event.sessionID)
+          blocked = actGate(session, event, catalog) ?? commitGate(session, event)
+        }
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }
@@ -137,8 +162,9 @@ export default {
 
     await ctx.tool.hook(
       "execute.after",
-      guarded("execute.after", (event) => {
-        if (event.tool === "skill" && event.input.id === "deslop" && event.status === "completed") deslopped.add(event.sessionID)
+      guarded("execute.after", async (event) => {
+        const id = loadedSkill(event, catalog)
+        if (id) await recordLoad(event.sessionID, id)
       }),
     )
   },

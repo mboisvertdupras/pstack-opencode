@@ -158,6 +158,7 @@ test("a failing OpenCode call never breaks the user's prompt", async () => {
 })
 
 const shell = (sessionID, agent, command) => ({ tool: "shell", sessionID, agent, input: { command } })
+const loaded = (sessionID, agent, id) => ({ tool: "skill", sessionID, agent, input: { id }, status: "completed" })
 
 test("a poteto-agent commit is blocked until deslop loads, then every commit passes", async () => {
   const { ctx, state } = fakeContext()
@@ -229,7 +230,7 @@ test("a plugin bug in the tool hooks never blocks a tool call", async () => {
   console.error = (...args) => errors.push(args)
   try {
     await state.hooks["execute.before"](shell("s1", "poteto-agent", "git commit -m a"))
-    await state.hooks["execute.after"]({ tool: "skill", sessionID: "s1", agent: "poteto-agent" })
+    await state.hooks["execute.after"](loaded("s1", "poteto-agent", "deslop"))
   } finally {
     console.error = original
   }
@@ -244,4 +245,115 @@ test("the gate matches git commit behind global flags and nothing that only ment
   const free = ["git commit-tree HEAD^{tree}", 'echo "git commit"', "git log --grep commit", "git status"]
   for (const command of free) await state.hooks["execute.before"](shell("s1", "poteto-agent", command))
   await state.hooks["execute.before"]({ tool: "edit", sessionID: "s1", agent: "poteto-agent", input: { command: "git commit" } })
+})
+
+const edit = (sessionID, agent = "build") => ({ tool: "edit", sessionID, agent, input: { path: "src/money.js" } })
+const delegate = (sessionID, subagent, agent = "build") => ({ tool: "subagent", sessionID, agent, input: { agent: subagent, prompt: "fix it" } })
+const BUG_FIX_GATE =
+  "pstack: the Bug fix playbook loads the `how` and `why` skills before any code change, and they are not loaded yet. Load `how` with the `skill` tool and run it, then `why`, then retry this call."
+
+async function potetoSession(storage) {
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage })
+  await plugin.setup(ctx)
+  await potetoMode(state, "s1")
+  return state
+}
+
+test("a /poteto-mode Bug fix blocks code edits until how and why load", async () => {
+  const state = await potetoSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: BUG_FIX_GATE })
+
+  await state.hooks["execute.after"](loaded("s1", "build", "how"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /loads the `why` skill before any code change, and it is not loaded yet\. Load `why` with the `skill` tool and run it, then retry this call\./)
+
+  await state.hooks["execute.after"](loaded("s1", "build", "why"))
+  await state.hooks["execute.before"](edit("s1"))
+  for (const tool of ["write", "apply_patch", "patch", "multiedit"]) await state.hooks["execute.before"]({ ...edit("s1"), tool })
+})
+
+test("a Bug fix blocks a code delegation as its first action, and never an explore subagent or a read", async () => {
+  const state = await potetoSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
+  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "poteto-agent")), { message: BUG_FIX_GATE })
+  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "general")), { message: BUG_FIX_GATE })
+  await state.hooks["execute.before"](delegate("s1", "explore"))
+  for (const tool of ["read", "grep", "glob", "skill", "todowrite"]) await state.hooks["execute.before"]({ tool, sessionID: "s1", agent: "build", input: {} })
+  await state.hooks["execute.before"](shell("s1", "build", "printf x > src/money.js"))
+
+  await state.hooks["execute.after"](loaded("s1", "build", "how"))
+  await state.hooks["execute.after"](loaded("s1", "build", "why"))
+  await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
+})
+
+test("reading a playbook file records it as the session's playbook, and a failed load records nothing", async () => {
+  const state = await potetoSession()
+  const read = (path, status = "completed") => ({ tool: "read", sessionID: "s1", agent: "build", input: { path }, status })
+  await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md", "error"))
+  await state.hooks["execute.before"](edit("s1"))
+
+  await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /the Feature playbook loads the `how` and `architect` skills/)
+  await state.hooks["execute.after"](read("/home/me/pstack/src/skills/how/SKILL.md"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /loads the `architect` skill/)
+})
+
+test("a playbook with no requires, and a poteto-mode session with no playbook, edit freely", async () => {
+  const state = await potetoSession()
+  await state.hooks["execute.before"](edit("s1"))
+  await state.hooks["execute.after"](loaded("s1", "build", "prototype"))
+  await state.hooks["execute.before"](edit("s1"))
+  await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
+})
+
+test("the poteto-mode agent is gated, and plain build sessions and delegates are not", async () => {
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "poteto-mode" }, s2: { agent: "build" }, s3: { agent: "poteto-agent" } } })
+  await plugin.setup(ctx)
+  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "bug-fix"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1", "poteto-mode")), { message: BUG_FIX_GATE })
+
+  await state.hooks["execute.after"](loaded("s2", "build", "bug-fix"))
+  await state.hooks["execute.before"](edit("s2"))
+  await state.hooks["execute.before"](delegate("s2", "general"))
+  await state.hooks["execute.after"](loaded("s3", "poteto-agent", "bug-fix"))
+  await state.hooks["execute.before"](edit("s3", "poteto-agent"))
+})
+
+test("the playbook and the loaded skills survive a plugin restart on the same storage", async () => {
+  const first = await potetoSession()
+  await first.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
+  await first.hooks["execute.after"](loaded("s1", "build", "how"))
+  await first.hooks["execute.after"](loaded("s1", "build", "deslop"))
+
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
+  await plugin.setup(ctx)
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /loads the `why` skill/)
+  await state.hooks["execute.before"](shell("s1", "build", "git commit -m a"))
+  await state.hooks["execute.after"](loaded("s1", "build", "why"))
+  await state.hooks["execute.before"](edit("s1"))
+})
+
+test("loads that finish together all land in storage", async () => {
+  const state = await potetoSession()
+  await Promise.all(["bug-fix", "how"].map((id) => state.hooks["execute.after"](loaded("s1", "build", id))))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /the Bug fix playbook loads the `why` skill before/)
+})
+
+test("a storage error during the gate lookup lets a code action through", async () => {
+  const state = await potetoSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
+  state.storage = new Proxy(state.storage, {
+    get() {
+      throw new Error("storage hiccup")
+    },
+  })
+  const errors = []
+  const original = console.error
+  console.error = (...args) => errors.push(args)
+  try {
+    await state.hooks["execute.before"](edit("s1"))
+  } finally {
+    console.error = original
+  }
+  assert.equal(errors.length, 1)
 })
