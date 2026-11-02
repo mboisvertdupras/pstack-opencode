@@ -76,6 +76,8 @@ export function playbookSkills(body) {
   return [...new Set([...steps.matchAll(NAMED_SKILL)].map(([, id]) => id))]
 }
 
+export const playbookRequires = (data) => (data.requires ?? "").split(",").map((id) => id.trim()).filter(Boolean)
+
 function readPlaybooks(modeDir) {
   const dir = join(modeDir, "playbooks")
   if (!existsSync(dir)) return []
@@ -86,18 +88,20 @@ function readPlaybooks(modeDir) {
     .map((name) => {
       const id = name.slice(0, -".md".length)
       const path = join(dir, name)
-      const body = readFileSync(path, "utf8")
+      const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
       const title = body.match(/^### (.+)$/m)?.[1] ?? id
       const frame = `This is the \`${MODE_AGENT}\` ${title} playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.`
       return {
         kind: "playbook",
         id,
         name: id,
+        title,
         description: descriptions.get(id) ?? title,
         path,
         content: `${frame}\n\n${absoluteLinks(body, dir)}`,
         autoinvoke: false,
         skills: playbookSkills(body),
+        requires: playbookRequires(data),
       }
     })
 }

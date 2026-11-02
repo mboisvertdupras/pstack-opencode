@@ -1,3 +1,7 @@
+---
+requires: how
+---
+
 ### Refactoring
 
 **You own the contract. The structure changes. The behavior does not.** Distinct from Feature, which adds behavior, and Bug fix, which corrects it.

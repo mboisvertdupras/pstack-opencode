@@ -105,7 +105,7 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
   mkdirSync(join(mode, "playbooks"), { recursive: true })
   mkdirSync(join(root, "skills", "babysit"))
   writeFileSync(join(mode, "SKILL.md"), "---\nname: poteto-mode\ndescription: Mode.\n---\n\n## Playbooks\n\n- **Bug fix.** A defect to fix.\n")
-  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "### Bug fix\n\n1. Load the `how` skill with the `skill` tool. See [the mode](../SKILL.md).\n")
+  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "---\nrequires: how,  why\n---\n\n### Bug fix\n\n1. Load the `how` skill with the `skill` tool. See [the mode](../SKILL.md).\n")
   writeFileSync(join(mode, "playbooks", "untitled.md"), "### Untitled\n\n1. Do it.\n")
   writeFileSync(join(mode, "playbooks", "babysit.md"), "### Babysit\n\n1. Watch.\n")
   writeFileSync(join(root, "skills", "babysit", "SKILL.md"), "---\nname: babysit\ndescription: A user-facing babysit skill.\n---\n\nBody\n")
@@ -117,12 +117,15 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
     kind: "playbook",
     id: "bug-fix",
     name: "bug-fix",
+    title: "Bug fix",
     description: "A defect to fix.",
     path: join(mode, "playbooks", "bug-fix.md"),
     content: undefined,
     autoinvoke: false,
     skills: ["how"],
+    requires: ["how", "why"],
   })
+  assert.deepEqual(byId.get("untitled")[0].requires, [])
   assert.equal(
     bugFix.content,
     `This is the \`poteto-mode\` Bug fix playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.\n\n### Bug fix\n\n1. Load the \`how\` skill with the \`skill\` tool. See [the mode](${mode}/SKILL.md).\n`,
@@ -137,4 +140,12 @@ test("every shipped playbook registers under its stem with its Playbooks list en
   const playbooks = readSkills(dir).filter((skill) => skill.kind === "playbook")
   assert.deepEqual(playbooks.map((playbook) => playbook.id).sort(), stems.sort())
   for (const playbook of playbooks) assert.match(playbook.description, /\.$/, `${playbook.id} has a Playbooks list entry`)
+  const gated = Object.fromEntries(playbooks.filter((playbook) => playbook.requires.length > 0).map((playbook) => [playbook.id, playbook.requires]))
+  assert.deepEqual(gated, {
+    "bug-fix": ["how", "why"],
+    feature: ["how", "architect"],
+    hillclimb: ["how"],
+    "perf-issue": ["benchmark-checklist", "how"],
+    refactoring: ["how"],
+  })
 })

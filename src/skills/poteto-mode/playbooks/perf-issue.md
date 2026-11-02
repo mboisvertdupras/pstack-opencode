@@ -1,3 +1,7 @@
+---
+requires: benchmark-checklist, how
+---
+
 ### Perf issue
 
 **You own the measurement story. Plan, review, verify the numbers.** Tie every fix to a measurement, don't read source instead of measuring.
