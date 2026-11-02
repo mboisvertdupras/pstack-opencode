@@ -190,6 +190,15 @@ test("the matrix playbook check fails on a wrong pick and names it", () => {
   assert.match(result.detail, /^picked feature;/)
 })
 
+test("skills_ran wants the skill's own work between its load and the first code action", () => {
+  const loadedOnly = tree(session("poteto-mode", [skill("how"), delegate()]))
+  assert.equal(check("matrix:bug@agent", loadedOnly, "skills_ran").pass, false)
+  const ran = tree(session("poteto-mode", [skill("how"), delegate("explore"), delegate()]))
+  assert.equal(check("matrix:bug@agent", ran, "skills_ran").detail, "how ran before acting")
+  const why = tree(session("poteto-mode", [skill("why"), commit("git log --oneline -- src/money.js"), edit()]))
+  assert.equal(check("matrix:bug@agent", why, "skills_ran").pass, true)
+})
+
 test("the matrix skills check fails when the skill loads only after the first edit", () => {
   const late = check("matrix:bug@agent", tree(session("poteto-mode", [read(), edit(), skill("how")])), "skills")
   assert.equal(late.pass, false)
@@ -243,7 +252,7 @@ test("an early-stopped matrix run is scored, and the table shows checks and the 
   assert.equal(summary.errors, 0)
   const lines = report(summary).split("\n")
   assert.match(lines[0], /^case\s+\| agent\s+\| build$/)
-  assert.match(lines[1], /^bug\s+\| playbook 0\/1 {2}skills 0\/1 {2}picked feature\s+\| -$/)
+  assert.match(lines[1], /^bug\s+\| playbook 0\/1 {2}skills 0\/1 {2}skills_ran 0\/1 {2}picked feature\s+\| -$/)
   assert.match(lines[2], /^question\s+\| -\s+\| stay_out 1\/1 {2}picked none$/)
-  assert.equal(lines.at(-1), "routing_accuracy=0.33 errors=0 work=2/2 commits=0 toolcalls=2")
+  assert.equal(lines.at(-1), "routing_accuracy=0.25 errors=0 work=2/2 commits=0 toolcalls=2")
 })

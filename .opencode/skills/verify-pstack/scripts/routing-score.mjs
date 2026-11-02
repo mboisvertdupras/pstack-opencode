@@ -5,6 +5,14 @@ import { sessionTree } from "./claude-stream.mjs"
 
 const SKILLS = join(import.meta.dirname, "..", "..", "..", "..", "src", "skills")
 const EDIT_TOOLS = new Set(["edit", "write", "apply_patch", "patch", "multiedit"])
+// What a skill does when it runs, as opposed to only loading: how, architect and arena spawn explore subagents, why digs through history.
+const RAN = {
+  how: (event) => event.delegate === "explore",
+  architect: (event) => event.delegate === "explore",
+  arena: (event) => event.delegate === "explore",
+  interrogate: (event) => Boolean(event.delegate),
+  why: (event) => event.delegate === "general" || /\bgit\s+(?:log|blame)\b/.test(event.shell ?? ""),
+}
 const SHELL_TOOLS = new Set(["shell", "bash"])
 const GIT_COMMIT = /\bgit(?:\s+-[cC]\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+commit(?![\w-])/
 
@@ -27,6 +35,7 @@ function toolEvents(exported) {
           skill: part.name === "skill" ? (input.id ?? input.name) : undefined,
           loaded: part.name === "skill" && part.state?.status === "completed",
           delegate: part.name === "subagent" ? input.agent : undefined,
+          shell: SHELL_TOOLS.has(part.name) ? (input.command ?? "") : undefined,
           edit: EDIT_TOOLS.has(part.name),
           commit: SHELL_TOOLS.has(part.name) && GIT_COMMIT.test(input.command ?? ""),
           playbook: playbooksIn(read)[0],
@@ -172,6 +181,15 @@ export const checks = {
     return { pass, picked, detail: `picked ${picked ?? "none"}; opened ${read.join(", ") || "none"}; todos match ${listed.join(", ") || "none"}` }
   },
 
+  skills_ran(view, { expect }) {
+    const anchor = Math.min(...codeAnchors(view).map((event) => event.time))
+    const events = view.parent.events
+    const ran = expect.skills.filter((id) => {
+      const load = events.find((event) => event.skill === id && event.time < anchor)
+      return load && events.some((event) => event.time > load.time && event.time < anchor && RAN[id]?.(event))
+    })
+    return { pass: ran.length > 0, detail: ran.length ? `${ran.join(", ")} ran before acting` : `none of ${expect.skills.join(", ")} ran before acting` }
+  },
   skills(view, { expect }) {
     const anchor = Math.min(...codeAnchors(view).map((event) => event.time))
     const loads = view.sessions
@@ -240,7 +258,7 @@ export const MATRIX_ENTRIES = {
 const MATRIX_GROUPS = { matrix: ["agent", "build"], "matrix@cc": ["cc-slash"], compare: ["agent", "slash", "cc-slash"] }
 const DECIDE_MS = 4 * MINUTE
 
-const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
+const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills", "skills_ran"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
 
 export const scenarios = {
   "feature-agent": { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
