@@ -1,18 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { MODE_AGENT, readSkills } from "../../../../src/plugin/lib.js"
+import { MODE_AGENT, RAN, readSkills } from "../../../../src/plugin/lib.js"
 import { sessionTree } from "./claude-stream.mjs"
 
 const SKILLS = join(import.meta.dirname, "..", "..", "..", "..", "src", "skills")
 const EDIT_TOOLS = new Set(["edit", "write", "apply_patch", "patch", "multiedit"])
-// What a skill does when it runs, as opposed to only loading: how, architect and arena spawn explore subagents, why digs through history.
-const RAN = {
-  how: (event) => event.delegate === "explore",
-  architect: (event) => event.delegate === "explore",
-  arena: (event) => event.delegate === "explore",
-  interrogate: (event) => Boolean(event.delegate),
-  why: (event) => event.delegate === "general" || /\bgit\s+(?:log|blame)\b/.test(event.shell ?? ""),
-}
 const SHELL_TOOLS = new Set(["shell", "bash"])
 const GIT_COMMIT = /\bgit(?:\s+-[cC]\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+commit(?![\w-])/
 
@@ -20,6 +12,8 @@ const AUTONOMOUS = "Work autonomously without asking questions. There is no git 
 const FEATURE_PROMPT = `Add discount codes to this invoicing service. A code takes either a percentage or a fixed amount off, has an expiry date, and each customer can use a given code only once. Customers apply a code at checkout, and the discount shows as its own line on the invoice and in the invoice email. ${AUTONOMOUS}`
 const INVESTIGATE_PROMPT = "How is an invoice's total computed in this service, from the items in a customer's cart through checkout to the amount shown in the invoice email? Walk through it across the modules and cite the code. Answer without asking questions."
 const PLAIN_PROMPT = 'Add an exported `isZero(amount)` helper to src/money.js that returns true for zero cents, then commit it on the current branch with the message "Add isZero". Work autonomously without asking questions.'
+
+const toolCall = ({ delegate, shell }) => ({ tool: delegate ? "subagent" : shell !== undefined ? "shell" : undefined, input: { agent: delegate, command: shell } })
 
 function toolEvents(exported) {
   return exported.messages.flatMap((message) => {
@@ -186,7 +180,7 @@ export const checks = {
     const events = view.parent.events
     const ran = expect.skills.filter((id) => {
       const load = events.find((event) => event.skill === id && event.time < anchor)
-      return load && events.some((event) => event.time > load.time && event.time < anchor && RAN[id]?.(event))
+      return load && events.some((event) => event.time > load.time && event.time < anchor && RAN[id]?.by(toolCall(event)))
     })
     return { pass: ran.length > 0, detail: ran.length ? `${ran.join(", ")} ran before acting` : `none of ${expect.skills.join(", ")} ran before acting` }
   },

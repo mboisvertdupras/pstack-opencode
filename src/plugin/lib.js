@@ -188,8 +188,7 @@ const runsShell =
     tool === "shell" && pattern.test(input.command)
 const EXPLORES = { by: spawns("explore"), finish: "spawn its `explore` subagents as the skill says" }
 
-// Matches RAN in the verify-pstack routing scorer. A skill with no rule has run once it loads.
-const RAN = {
+export const RAN = {
   how: EXPLORES,
   architect: EXPLORES,
   arena: EXPLORES,
@@ -219,8 +218,8 @@ const listed = (items) => (items.length < 2 ? items.join("") : `${items.slice(0,
 export function actGate(session, event, skills) {
   if (!isCodeAction(event) || !(session.mode || event.agent === MODE_AGENT)) return undefined
   // `why` runs by spawning `general` subagents, so a `general` spawn waits only for the loads. Waiting for the runs too would deadlock.
-  const needsRun = event.tool !== "subagent" || event.input.agent === "poteto-agent"
-  const unfinished = (id) => !session.loaded.includes(id) || (needsRun && RAN[id] && !session.ran.includes(id))
+  const loadsOnly = event.tool === "subagent" && event.input.agent === "general"
+  const unfinished = (id) => !session.loaded.includes(id) || (!loadsOnly && RAN[id] && !session.ran.includes(id))
   const playbook = skills.get(session.playbook)
   const missing = playbook?.requires.filter(unfinished) ?? []
   if (missing.length === 0) return undefined
