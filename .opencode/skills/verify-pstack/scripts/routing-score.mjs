@@ -236,7 +236,7 @@ export const MATRIX_CASES = [
     prompt: "Plan moving storage from JSON files to SQLite across several PRs. Don't implement anything. Answer without asking questions.",
     expect: { playbook: "multi-phase-plan" },
   },
-  { id: "review", prompt: "Adversarially review the checkout module and try to break it. Answer without asking questions.", expect: { skills: ["interrogate"] } },
+  { id: "review", prompt: "Adversarially review the checkout module and try to break it. Answer without asking questions.", expect: { playbook: "review", skills: ["interrogate"] } },
   {
     id: "prototype",
     prompt: `Sketch two ways to show discounts in the invoice email so I can pick one. ${AUTONOMOUS}`,

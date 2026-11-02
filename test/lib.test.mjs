@@ -149,9 +149,10 @@ test("every shipped playbook registers under its stem with its Playbooks list en
     hillclimb: ["how"],
     "perf-issue": ["benchmark-checklist", "how"],
     refactoring: ["how"],
+    review: ["interrogate"],
   })
   const readGated = playbooks.filter((playbook) => playbook.gates.includes("reads")).map((playbook) => playbook.id)
-  assert.deepEqual(readGated.sort(), ["investigation"])
+  assert.deepEqual(readGated.sort(), ["investigation", "review"])
 })
 
 const CATALOG = new Map([

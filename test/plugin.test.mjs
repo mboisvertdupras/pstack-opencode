@@ -409,6 +409,21 @@ test("an Investigation holds the parent's project reads, greps and globs until h
   for (const tool of ["read", "grep", "glob"]) await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js", tool))
 })
 
+test("a Review holds reads until interrogate loads and spawns its general adversaries", async () => {
+  const state = await projectSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "review"))
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/cart/checkout.js")), {
+    message: "pstack: the Review playbook reads the code through the `interrogate` skill. Load `interrogate` with the `skill` tool and run it, then use its findings instead of reading files yourself.",
+  })
+  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "general")), /runs the `interrogate` skill before any code change/)
+
+  await state.hooks["execute.after"](loaded("s1", "build", "interrogate"))
+  await state.hooks["execute.before"](delegate("s1", "general"))
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/cart/checkout.js")), /`interrogate` is loaded but hasn't run: spawn its `general` adversaries/)
+  await state.hooks["execute.after"](spawned("s1", "general"))
+  await state.hooks["execute.before"](readOf("s1", "/repo/src/cart/checkout.js"))
+})
+
 test("a code-gated playbook, a plain build session, and a subagent session never hold reads", async () => {
   const state = await projectSession()
   await state.hooks["execute.after"](loaded("s1", "build", "feature"))
