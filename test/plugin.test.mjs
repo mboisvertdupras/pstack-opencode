@@ -375,3 +375,49 @@ test("a storage error during the gate lookup lets a code action through", async 
   }
   assert.equal(errors.length, 1)
 })
+
+const readOf = (sessionID, path, tool = "read", agent = "build") => ({ tool, sessionID, agent, input: path === undefined ? {} : { path } })
+const INVESTIGATION_GATE =
+  "pstack: the Investigation playbook reads the code through the `how` skill. Load `how` with the `skill` tool and run it, then use its findings instead of reading files yourself."
+
+async function projectSession() {
+  const sessions = { s1: { agent: "build", location: { directory: "/repo" } }, s2: { agent: "build", location: { directory: "/repo" } }, s3: { agent: "explore", location: { directory: "/repo" } } }
+  const { ctx, state } = fakeContext({ sessions })
+  await plugin.setup(ctx)
+  await potetoMode(state, "s1")
+  return state
+}
+
+test("an Investigation holds the parent's project reads, greps and globs until how loads and its explorer runs", async () => {
+  const state = await projectSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "investigation"))
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/money.js")), { message: INVESTIGATION_GATE })
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "src/money.js")), { message: INVESTIGATION_GATE })
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", undefined, "grep")), { message: INVESTIGATION_GATE })
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src", "glob")), { message: INVESTIGATION_GATE })
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /runs the `how` skill before any code change/)
+
+  await state.hooks["execute.before"](readOf("s1", join(SRC, "skills", "how", "SKILL.md")))
+  await state.hooks["execute.before"](readOf("s1", join(SRC, "skills"), "glob"))
+  await state.hooks["execute.before"](readOf("s1", "/etc/hosts"))
+  await state.hooks["execute.before"](shell("s1", "build", "git blame src/money.js"))
+  await state.hooks["execute.before"](delegate("s1", "explore"))
+
+  await state.hooks["execute.after"](loaded("s1", "build", "how"))
+  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/money.js")), /`how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then use its findings/)
+  await state.hooks["execute.after"](spawned("s1", "explore"))
+  for (const tool of ["read", "grep", "glob"]) await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js", tool))
+})
+
+test("a code-gated playbook, a plain build session, and a subagent session never hold reads", async () => {
+  const state = await projectSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "feature"))
+  await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js"))
+  await state.hooks["execute.before"](readOf("s1", undefined, "grep"))
+
+  for (const [sessionID, agent] of [["s2", "build"], ["s3", "explore"]]) {
+    await state.hooks["execute.after"](loaded(sessionID, agent, "investigation"))
+    await state.hooks["execute.before"](readOf(sessionID, "/repo/src/money.js", "read", agent))
+    await state.hooks["execute.before"](readOf(sessionID, undefined, "grep", agent))
+  }
+})

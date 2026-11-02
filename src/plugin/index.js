@@ -1,6 +1,6 @@
 import { readFileSync, realpathSync, statSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   MODE_AGENT,
@@ -12,6 +12,7 @@ import {
   commitGate,
   entryOps,
   isCodeAction,
+  isReadAction,
   isSkillEvent,
   modeEntry,
   modelsEntry,
@@ -146,12 +147,30 @@ export default {
       guarded("context", (event) => reconcile(event.sessionID, event.agent)),
     )
 
+    const real = (path) => {
+      try {
+        return realpathSync(path)
+      } catch {
+        return path
+      }
+    }
+    const within = (path, dir) => {
+      const rel = relative(dir, path)
+      return !rel.startsWith("..") && !isAbsolute(rel)
+    }
+    const readsProject = async ({ sessionID, input }) => {
+      const directory = unwrap(await ctx.session.get({ sessionID }))?.location?.directory
+      const target = real(resolve(directory ?? "", input.path ?? input.filePath ?? "."))
+      return !within(target, ROOT) && (!directory || within(target, real(directory)))
+    }
+
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        if (isCodeAction(event)) {
+        if (isCodeAction(event) || isReadAction(event)) {
           const session = await sessionState(event.sessionID)
           blocked = actGate(session, event, catalog) ?? commitGate(session, event)
+          if (blocked && isReadAction(event) && !(await readsProject(event))) blocked = undefined
         }
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)

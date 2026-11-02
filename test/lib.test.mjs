@@ -124,6 +124,7 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
     autoinvoke: false,
     skills: ["how"],
     requires: ["how", "why"],
+    gates: [],
   })
   assert.deepEqual(byId.get("untitled")[0].requires, [])
   assert.equal(
@@ -144,15 +145,19 @@ test("every shipped playbook registers under its stem with its Playbooks list en
   assert.deepEqual(gated, {
     "bug-fix": ["how", "why"],
     feature: ["how", "architect"],
+    investigation: ["how"],
     hillclimb: ["how"],
     "perf-issue": ["benchmark-checklist", "how"],
     refactoring: ["how"],
   })
+  const readGated = playbooks.filter((playbook) => playbook.gates.includes("reads")).map((playbook) => playbook.id)
+  assert.deepEqual(readGated.sort(), ["investigation"])
 })
 
 const CATALOG = new Map([
-  ["perf", { kind: "playbook", id: "perf", title: "Perf issue", requires: ["bench", "how", "why"] }],
-  ["notes", { kind: "playbook", id: "notes", title: "Notes", requires: [] }],
+  ["perf", { kind: "playbook", id: "perf", title: "Perf issue", requires: ["bench", "how", "why"], gates: [] }],
+  ["notes", { kind: "playbook", id: "notes", title: "Notes", requires: [], gates: [] }],
+  ["ask", { kind: "playbook", id: "ask", title: "Investigation", requires: ["how"], gates: ["reads"] }],
   ["how", { kind: "skill", id: "how" }],
 ])
 const editBy = (agent) => ({ tool: "edit", agent, input: { path: "a.js" } })
@@ -175,6 +180,21 @@ test("the act gate names each unfinished required skill in order with how to fin
   assert.equal(actGate(session, { tool: "shell", agent: "build", input: { command: "echo > a.js" } }, CATALOG), undefined)
   assert.equal(actGate({ ...session, playbook: "notes" }, editBy("build"), CATALOG), undefined)
   assert.equal(actGate({ ...session, playbook: "gone" }, editBy("build"), CATALOG), undefined)
+})
+
+test("a read-gated playbook holds the parent's reads until its required skills run, and other playbooks never hold reads", () => {
+  const read = { tool: "read", agent: "build", input: { path: "src/a.js" } }
+  const asking = { mode: true, playbook: "ask", loaded: ["how"], ran: [] }
+  assert.equal(
+    actGate(asking, read, CATALOG),
+    "pstack: the Investigation playbook reads the code through the `how` skill. `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then use its findings instead of reading files yourself.",
+  )
+  for (const tool of ["grep", "glob", "list"]) assert.match(actGate(asking, { ...read, tool }, CATALOG), /reads the code through the `how` skill/)
+  assert.match(actGate(asking, editBy("build"), CATALOG), /runs the `how` skill before any code change/)
+  assert.equal(actGate(asking, { tool: "shell", agent: "build", input: { command: "git blame src/a.js" } }, CATALOG), undefined)
+  assert.equal(actGate({ ...asking, ran: ["how"] }, read, CATALOG), undefined)
+  assert.equal(actGate({ ...asking, mode: false }, read, CATALOG), undefined)
+  assert.equal(actGate({ mode: true, playbook: "perf", loaded: [], ran: [] }, read, CATALOG), undefined)
 })
 
 test("a general spawn waits for the required loads but not the runs, so why can spawn its investigators", () => {
@@ -204,7 +224,8 @@ test("a skill runs only on matching evidence after its load, and a newer playboo
   assert.deepEqual(apply(load("how"), spawn("general"), spawn("explore")), { loaded: ["how"], ran: ["how"] })
   assert.deepEqual(apply(load("why"), shell("git log -p src/a.js", "error"), shell("git status")), { loaded: ["why"], ran: [] })
   assert.deepEqual(apply(load("why"), shell("cd src && git blame a.js")), { loaded: ["why"], ran: ["why"] })
-  assert.deepEqual(apply(load("interrogate"), spawn("poteto-agent")), { loaded: ["interrogate"], ran: ["interrogate"] })
+  assert.deepEqual(apply(load("interrogate"), spawn("poteto-agent")), { loaded: ["interrogate"], ran: [] })
+  assert.deepEqual(apply(load("interrogate"), spawn("general")), { loaded: ["interrogate"], ran: ["interrogate"] })
 
   const started = apply(load("how"))
   assert.equal(withEvent(started, load("how"), CATALOG), started)

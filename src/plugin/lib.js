@@ -76,7 +76,8 @@ export function playbookSkills(body) {
   return [...new Set([...steps.matchAll(NAMED_SKILL)].map(([, id]) => id))]
 }
 
-export const playbookRequires = (data) => (data.requires ?? "").split(",").map((id) => id.trim()).filter(Boolean)
+const list = (value) => (value ?? "").split(",").map((item) => item.trim()).filter(Boolean)
+export const playbookRequires = (data) => list(data.requires)
 
 function readPlaybooks(modeDir) {
   const dir = join(modeDir, "playbooks")
@@ -102,6 +103,7 @@ function readPlaybooks(modeDir) {
         autoinvoke: false,
         skills: playbookSkills(body),
         requires: playbookRequires(data),
+        gates: list(data.gates),
       }
     })
 }
@@ -181,7 +183,7 @@ export function loadedSkill({ tool, input, status }, skills) {
 const spawns =
   (...agents) =>
   ({ tool, input }) =>
-    tool === "subagent" && (agents.length === 0 || agents.includes(input.agent))
+    tool === "subagent" && agents.includes(input.agent)
 const runsShell =
   (pattern) =>
   ({ tool, input }) =>
@@ -192,7 +194,7 @@ export const RAN = {
   how: EXPLORES,
   architect: EXPLORES,
   arena: EXPLORES,
-  interrogate: { by: spawns(), finish: "spawn its reviewer subagents as the skill says" },
+  interrogate: { by: spawns("general"), finish: "spawn its `general` adversaries as the skill says" },
   why: {
     by: (event) => spawns("general")(event) || runsShell(/\bgit\s+(?:log|blame)\b/)(event),
     finish: "spawn its `general` subagents, or read the history with `git log` or `git blame`, as the skill says",
@@ -215,19 +217,29 @@ export function withEvent(record, event, skills) {
 
 const listed = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`)
 
+const READ_TOOLS = new Set(["read", "grep", "glob", "list"])
+export const isReadAction = ({ tool }) => READ_TOOLS.has(tool)
+
+const HOLDS = {
+  code: { reason: (skills) => `runs the ${skills} before any code change`, then: (event) => `retry this call${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}` },
+  reads: { reason: (skills) => `reads the code through the ${skills}`, then: (event, missing) => `use ${missing.length === 1 ? "its" : "their"} findings instead of reading files yourself` },
+}
+
 export function actGate(session, event, skills) {
-  if (!isCodeAction(event) || !(session.mode || event.agent === MODE_AGENT)) return undefined
-  // `why` runs by spawning `general` subagents, so a `general` spawn waits only for the loads. Waiting for the runs too would deadlock.
+  if (!(session.mode || event.agent === MODE_AGENT)) return undefined
+  const playbook = skills.get(session.playbook)
+  const held = isCodeAction(event) ? "code" : isReadAction(event) && playbook?.gates.includes("reads") ? "reads" : undefined
+  if (!held) return undefined
+  // `why` and `interrogate` run by spawning `general` subagents, so a `general` spawn waits only for the loads. Waiting for the runs too would deadlock.
   const loadsOnly = event.tool === "subagent" && event.input.agent === "general"
   const unfinished = (id) => !session.loaded.includes(id) || (!loadsOnly && RAN[id] && !session.ran.includes(id))
-  const playbook = skills.get(session.playbook)
   const missing = playbook?.requires.filter(unfinished) ?? []
   if (missing.length === 0) return undefined
   const steps = missing
     .map((id) => (session.loaded.includes(id) ? `\`${id}\` is loaded but hasn't run: ${RAN[id].finish}` : `load \`${id}\` with the \`skill\` tool and run it`))
     .join(", then ")
-  const names = listed(missing.map((id) => `\`${id}\``))
-  return `pstack: the ${playbook.title} playbook runs the ${names} skill${missing.length === 1 ? "" : "s"} before any code change. ${steps[0].toUpperCase()}${steps.slice(1)}, then retry this call${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}.`
+  const names = `${listed(missing.map((id) => `\`${id}\``))} skill${missing.length === 1 ? "" : "s"}`
+  return `pstack: the ${playbook.title} playbook ${HOLDS[held].reason(names)}. ${steps[0].toUpperCase()}${steps.slice(1)}, then ${HOLDS[held].then(event, missing)}.`
 }
 
 export function entryOps(want, have) {
