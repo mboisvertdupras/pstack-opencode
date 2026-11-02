@@ -10,6 +10,7 @@ import {
   commandPrompt,
   commitGate,
   entryOps,
+  isCommit,
   modeEntry,
   modelsEntry,
   readSkills,
@@ -127,7 +128,7 @@ export default {
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        blocked = commitGate({ mode: await commandedMode(event.sessionID), deslop: deslopped.has(event.sessionID) }, event)
+        if (isCommit(event)) blocked = commitGate({ mode: await commandedMode(event.sessionID), deslop: deslopped.has(event.sessionID) }, event)
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }

@@ -94,9 +94,11 @@ export function modelsEntry(file, text) {
   return `pstack per-role model choices, written by /setup-pstack to \`${file}\`. Each role line overrides that role's default model in pstack skills.\n\n${text}`
 }
 
-export function commitGate(session, { tool, agent, input }) {
-  if (tool !== "shell" || !GIT_COMMIT.test(input.command)) return undefined
-  if (session.deslop || !(session.mode || MODE_AGENTS.includes(agent))) return undefined
+export const isCommit = ({ tool, input }) => tool === "shell" && GIT_COMMIT.test(input.command)
+
+export function commitGate(session, event) {
+  if (!isCommit(event)) return undefined
+  if (session.deslop || !(session.mode || MODE_AGENTS.includes(event.agent))) return undefined
   return COMMIT_GATE
 }
 
