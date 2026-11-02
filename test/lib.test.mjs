@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { actGate, commandDescription, commandPrompt, entryOps, loadedSkill, parseFrontmatter, playbookDescriptions, playbookSkills, readSkills, withLoad } from "../src/plugin/lib.js"
+import { actGate, commandDescription, commandPrompt, entryOps, loadedSkill, parseFrontmatter, playbookDescriptions, playbookSkills, readSkills, withEvent } from "../src/plugin/lib.js"
 
 test("frontmatter reads double-quoted, single-quoted, plain, and folded descriptions", () => {
   const quoted = parseFrontmatter('---\nname: how\ndescription: "Use for \\"how does X work\\"."\ndisable-model-invocation: true\n---\n\n# How\n')
@@ -156,15 +156,19 @@ const CATALOG = new Map([
   ["how", { kind: "skill", id: "how" }],
 ])
 const editBy = (agent) => ({ tool: "edit", agent, input: { path: "a.js" } })
+const spawn = (agent) => ({ tool: "subagent", agent: "build", input: { agent }, status: "completed" })
 
-test("the act gate names every missing required skill in order, and only for code actions in poteto mode", () => {
-  const session = { mode: true, playbook: "perf", loaded: ["how"] }
+test("the act gate names each unfinished required skill in order with how to finish it, only for code actions in poteto mode", () => {
+  const session = { mode: true, playbook: "perf", loaded: ["how"], ran: [] }
   assert.equal(
     actGate(session, editBy("build"), CATALOG),
-    "pstack: the Perf issue playbook loads the `bench` and `why` skills before any code change, and they are not loaded yet. Load `bench` with the `skill` tool and run it, then `why`, then retry this call.",
+    "pstack: the Perf issue playbook runs the `bench`, `how` and `why` skills before any code change. Load `bench` with the `skill` tool and run it, then `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then load `why` with the `skill` tool and run it, then retry this call.",
   )
-  assert.match(actGate({ ...session, loaded: [] }, editBy("build"), CATALOG), /the `bench`, `how` and `why` skills.*Load `bench` with the `skill` tool and run it, then `how`, then `why`, then retry/)
-  assert.equal(actGate({ ...session, loaded: ["bench", "how", "why"] }, editBy("build"), CATALOG), undefined)
+  assert.equal(
+    actGate({ ...session, loaded: ["bench", "how", "why"], ran: ["why"] }, editBy("build"), CATALOG),
+    "pstack: the Perf issue playbook runs the `how` skill before any code change. `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then retry this call.",
+  )
+  assert.equal(actGate({ ...session, loaded: ["bench", "how", "why"], ran: ["how", "why"] }, editBy("build"), CATALOG), undefined)
   assert.equal(actGate({ ...session, mode: false }, editBy("build"), CATALOG), undefined)
   assert.ok(actGate({ ...session, mode: false }, editBy("poteto-mode"), CATALOG))
   assert.equal(actGate(session, { tool: "subagent", agent: "build", input: { agent: "explore" } }, CATALOG), undefined)
@@ -173,15 +177,37 @@ test("the act gate names every missing required skill in order, and only for cod
   assert.equal(actGate({ ...session, playbook: "gone" }, editBy("build"), CATALOG), undefined)
 })
 
-test("a completed skill load or pstack skill file read is a load, and a newer playbook replaces the older one", () => {
+test("a general spawn waits for the required loads but not the runs, so why can spawn its investigators", () => {
+  const general = { tool: "subagent", agent: "build", input: { agent: "general" } }
+  const delegate = { tool: "subagent", agent: "build", input: { agent: "poteto-agent" } }
+  const loadedOnly = { mode: true, playbook: "perf", loaded: ["bench", "how", "why"], ran: [] }
+  assert.equal(actGate(loadedOnly, general, CATALOG), undefined)
+  assert.match(actGate(loadedOnly, delegate, CATALOG), /`how` is loaded but hasn't run/)
+  assert.match(actGate({ ...loadedOnly, loaded: ["how"] }, general, CATALOG), /Load `bench` with the `skill` tool/)
+})
+
+test("a completed skill load or pstack skill file read is a load", () => {
   assert.equal(loadedSkill({ tool: "skill", input: { id: "how" }, status: "completed" }, CATALOG), "how")
   assert.equal(loadedSkill({ tool: "skill", input: { id: "how" }, status: "error" }, CATALOG), undefined)
   assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/poteto-mode/playbooks/perf.md" }, status: "completed" }, CATALOG), "perf")
   assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/how/SKILL.md" }, status: "completed" }, CATALOG), "how")
   assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/mine/SKILL.md" }, status: "completed" }, CATALOG), undefined)
+})
 
-  const started = withLoad(undefined, "how", CATALOG)
-  assert.deepEqual(started, { loaded: ["how"] })
-  assert.equal(withLoad(started, "how", CATALOG), started)
-  assert.deepEqual(withLoad(withLoad(started, "perf", CATALOG), "notes", CATALOG), { loaded: ["how"], playbook: "notes" })
+test("a skill runs only on matching evidence after its load, and a newer playbook replaces the older one", () => {
+  const load = (id) => ({ tool: "skill", input: { id }, status: "completed" })
+  const shell = (command, status = "completed") => ({ tool: "shell", input: { command }, status })
+  const apply = (...events) => events.reduce((record, event) => withEvent(record, event, CATALOG), undefined)
+
+  assert.equal(apply(spawn("explore")), undefined)
+  assert.deepEqual(apply(spawn("explore"), load("how")), { loaded: ["how"], ran: [] })
+  assert.deepEqual(apply(load("how"), spawn("general"), spawn("explore")), { loaded: ["how"], ran: ["how"] })
+  assert.deepEqual(apply(load("why"), shell("git log -p src/a.js", "error"), shell("git status")), { loaded: ["why"], ran: [] })
+  assert.deepEqual(apply(load("why"), shell("cd src && git blame a.js")), { loaded: ["why"], ran: ["why"] })
+  assert.deepEqual(apply(load("interrogate"), spawn("poteto-agent")), { loaded: ["interrogate"], ran: ["interrogate"] })
+
+  const started = apply(load("how"))
+  assert.equal(withEvent(started, load("how"), CATALOG), started)
+  assert.equal(withEvent(started, spawn("poteto-agent"), CATALOG), started)
+  assert.deepEqual(apply(load("how"), load("perf"), load("notes")), { loaded: ["how"], ran: [], playbook: "notes" })
 })

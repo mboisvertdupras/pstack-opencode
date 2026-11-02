@@ -13,11 +13,11 @@ import {
   entryOps,
   isCodeAction,
   isCommit,
-  loadedSkill,
+  isSkillEvent,
   modeEntry,
   modelsEntry,
   readSkills,
-  withLoad,
+  withEvent,
 } from "./lib.js"
 
 const ROOT = dirname(dirname(realpathSync(fileURLToPath(import.meta.url))))
@@ -60,13 +60,13 @@ export default {
     const skillsInOrder = inOrder()
     const sessionState = (sessionID) =>
       skillsInOrder(sessionID, async () => {
-        const { playbook, loaded = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
-        return { mode: await commandedMode(sessionID), playbook, loaded }
+        const { playbook, loaded = [], ran = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
+        return { mode: await commandedMode(sessionID), playbook, loaded, ran }
       })
-    const recordLoad = (sessionID, id) =>
+    const record = (sessionID, event) =>
       skillsInOrder(sessionID, async () => {
         const before = await ctx.storage.get(skillsKey(sessionID))
-        const after = withLoad(before, id, catalog)
+        const after = withEvent(before, event, catalog)
         if (after !== before) await ctx.storage.set(skillsKey(sessionID), after)
       })
 
@@ -163,8 +163,7 @@ export default {
     await ctx.tool.hook(
       "execute.after",
       guarded("execute.after", async (event) => {
-        const id = loadedSkill(event, catalog)
-        if (id) await recordLoad(event.sessionID, id)
+        if (isSkillEvent(event, catalog)) await record(event.sessionID, event)
       }),
     )
   },

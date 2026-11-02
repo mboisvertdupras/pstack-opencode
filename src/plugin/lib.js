@@ -178,22 +178,57 @@ export function loadedSkill({ tool, input, status }, skills) {
   return skills.has(id) ? id : undefined
 }
 
-export function withLoad(record, id, skills) {
-  const session = record ?? { loaded: [] }
-  if (skills.get(id)?.kind === "playbook") return session.playbook === id ? session : { ...session, playbook: id }
-  return session.loaded.includes(id) ? session : { ...session, loaded: [...session.loaded, id] }
+const spawns =
+  (...agents) =>
+  ({ tool, input }) =>
+    tool === "subagent" && (agents.length === 0 || agents.includes(input.agent))
+const runsShell =
+  (pattern) =>
+  ({ tool, input }) =>
+    tool === "shell" && pattern.test(input.command)
+const EXPLORES = { by: spawns("explore"), finish: "spawn its `explore` subagents as the skill says" }
+
+// Matches RAN in the verify-pstack routing scorer. A skill with no rule has run once it loads.
+const RAN = {
+  how: EXPLORES,
+  architect: EXPLORES,
+  arena: EXPLORES,
+  interrogate: { by: spawns(), finish: "spawn its reviewer subagents as the skill says" },
+  why: {
+    by: (event) => spawns("general")(event) || runsShell(/\bgit\s+(?:log|blame)\b/)(event),
+    finish: "spawn its `general` subagents, or read the history with `git log` or `git blame`, as the skill says",
+  },
+}
+
+const isEvidence = (event) => Object.values(RAN).some((rule) => rule.by(event))
+
+export const isSkillEvent = (event, skills) => event.status === "completed" && (Boolean(loadedSkill(event, skills)) || isEvidence(event))
+
+export function withEvent(record, event, skills) {
+  const session = { loaded: [], ran: [], ...record }
+  const id = loadedSkill(event, skills)
+  if (skills.get(id)?.kind === "playbook") return session.playbook === id ? record : { ...session, playbook: id }
+  if (id) return session.loaded.includes(id) ? record : { ...session, loaded: [...session.loaded, id] }
+  if (event.status !== "completed") return record
+  const fresh = session.loaded.filter((loaded) => !session.ran.includes(loaded) && RAN[loaded]?.by(event))
+  return fresh.length === 0 ? record : { ...session, ran: [...session.ran, ...fresh] }
 }
 
 const listed = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`)
 
 export function actGate(session, event, skills) {
   if (!isCodeAction(event) || !(session.mode || event.agent === MODE_AGENT)) return undefined
+  // `why` runs by spawning `general` subagents, so a `general` spawn waits only for the loads. Waiting for the runs too would deadlock.
+  const needsRun = event.tool !== "subagent" || event.input.agent === "poteto-agent"
+  const unfinished = (id) => !session.loaded.includes(id) || (needsRun && RAN[id] && !session.ran.includes(id))
   const playbook = skills.get(session.playbook)
-  const missing = playbook?.requires.filter((id) => !session.loaded.includes(id)) ?? []
+  const missing = playbook?.requires.filter(unfinished) ?? []
   if (missing.length === 0) return undefined
-  const [first, ...rest] = missing.map((id) => `\`${id}\``)
-  const one = rest.length === 0
-  return `pstack: the ${playbook.title} playbook loads the ${listed([first, ...rest])} skill${one ? "" : "s"} before any code change, and ${one ? "it is" : "they are"} not loaded yet. Load ${first} with the \`skill\` tool and run it, ${rest.map((id) => `then ${id}, `).join("")}then retry this call.`
+  const steps = missing
+    .map((id) => (session.loaded.includes(id) ? `\`${id}\` is loaded but hasn't run: ${RAN[id].finish}` : `load \`${id}\` with the \`skill\` tool and run it`))
+    .join(", then ")
+  const names = listed(missing.map((id) => `\`${id}\``))
+  return `pstack: the ${playbook.title} playbook runs the ${names} skill${missing.length === 1 ? "" : "s"} before any code change. ${steps[0].toUpperCase()}${steps.slice(1)}, then retry this call.`
 }
 
 export function entryOps(want, have) {
