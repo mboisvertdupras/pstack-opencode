@@ -47,7 +47,6 @@ function stepOnes(playbooks) {
     .map(([stem, step]) => [stem, normalize(step).slice(0, STEP_PREFIX)])
 }
 
-// What a runtime's pstack counts as entering pstack, and each playbook's step 1, read from that runtime's own skills folder.
 export const catalogOf = (skillsRoot, pstackIDs) => ({ pstack: pstackIDs, stepOnes: stepOnes(join(skillsRoot, MODE_AGENT, "playbooks")) })
 
 const OPENCODE_CATALOG = catalogOf(

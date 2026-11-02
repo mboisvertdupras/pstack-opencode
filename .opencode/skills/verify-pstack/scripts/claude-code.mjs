@@ -39,7 +39,6 @@ export function claudeModel(spec) {
   return { model, effort }
 }
 
-// OpenCode's matrix stops at the parent's first edit, commit, or poteto-agent delegation, or once the whole tree is idle.
 export function stopFor(stream, context) {
   if (decided(sessionTree(stream, context))) return "decision"
   const started = stream.filter((event) => event.subtype === "task_started").map((event) => event.task_id)

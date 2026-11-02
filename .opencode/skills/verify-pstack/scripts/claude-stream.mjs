@@ -18,7 +18,6 @@ function toolPart(block, time) {
   return tool(block.name, input)
 }
 
-// pstack-claude creates one task per TaskCreate call, so a run of them is the one todo list OpenCode's todowrite would carry.
 export function sessionTree(stream, { prompt, skills = [], catalog }) {
   const init = stream.find((event) => event.type === "system" && event.subtype === "init")
   const rootID = init?.session_id ?? "root"
