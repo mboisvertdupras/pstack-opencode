@@ -60,6 +60,9 @@ Each subcommand saves its evidence and prints the path on a `proof` line. Turns 
 | A slash command, as the TUI sends it | `$H command <name> [--agent <id>] "<text>"` |
 | Which skills each user message carried, plus tool calls and replies | `$H export <sid>` |
 | A session and every descendant, with instruction entries, once all of them stay idle | `$H tree <sid>` |
+| A prompt sent without waiting for the reply | `$H start [--agent <id>] "<prompt>"` |
+| The tree as it stands now, with a busy count | `$H snapshot <sid>` |
+| Interrupt a session and every descendant until all stay idle | `$H stop <sid>` |
 | The session's instruction entries | `$H entries <sid>` |
 | Subagent sessions a session spawned | `$H children <sid>` |
 | Where a skill ID resolves | `$H skill <id>` |
@@ -85,6 +88,12 @@ Each run starts its own server with the fixture as the seed and `~/.config/openc
 - **The `plain-build` gate.** A small change under `build` commits, gets no `pstack-mode` entry, and loads no hidden pstack skill.
 
 The output is a scenario-by-check pass table, a `gate=` line per gate, and a last line of `routing_accuracy=<0.xx> errors=<n> work=<scored>/<planned> commits=<n> toolcalls=<n>`. A run with a harness failure, a nonzero exit, a timeout, or no tool calls counts as an error and is left out of the accuracy. To change a check and score the saved runs again without new turns, use `--rescore verify-evidence/routing/<label>`.
+
+**Routing matrix.** The matrix asks whether each kind of task reaches the right playbook and first skill, and whether small tasks stay out of pstack. `MATRIX_CASES` in `routing-score.mjs` holds one row per case (`bug`, `perf`, `refactor`, `feature`, `how`, `why`, `plan`, `review`, `prototype`, `typo`, `question`), each with a prompt and an `expect` of `playbook`, `skills`, or `stayOut`. Each row runs as `matrix:<case>@agent` under `poteto-mode` and `matrix:<case>@build` under plain `build`. Select them with `--scenarios matrix`, `matrix@agent`, `matrix@build`, or a single row id. `playbook` passes when the parent reads `poteto-mode/playbooks/<stem>.md` or its first `todowrite` carries that playbook's step 1, and the table shows the playbook it actually picked. `skills` passes when a listed skill loads anywhere in the tree before the first edit, commit, or `poteto-agent` delegation. `stay_out` passes when no playbook is read and no hidden pstack skill loads, apart from the skill the `poteto-mode` agent attaches to its own first message. Matrix rows never finish the task. The driver sends the prompt with `$H start`, takes `$H snapshot` every 10 seconds, and stops at the parent's first edit, commit, or `poteto-agent` delegation, an idle tree, or the `--decide <ms>` budget (240000 by default). `$H stop` then calls `session.interrupt` on every busy session until the tree stays idle, and the record notes `stoppedBy`. An early stop is not an error. The output is a case by entry table, then the usual last line.
+
+```sh
+node .opencode/skills/verify-pstack/scripts/routing-eval.mjs --label <arm> --scenarios matrix --runs 3 --parallel 4 --model claude-agent/opus#medium
+```
 
 Every run spends real tokens. One real Opus feature session with a single delegate took about 12 minutes and 3.2 million cache-read tokens across its two sessions, and a full arm multiplies that by runs times feature scenarios. `--model` sets only the parent. Delegates take their models from the model file, so a haiku parent on your own `pstack-models.md` still spawns Opus and GPT architect runners and an Opus `poteto-agent`. Validate a change to the eval itself with `--model claude-agent/haiku --models .opencode/skills/verify-pstack/fixtures/pstack-models-inherit.md` and one run per scenario, which keeps every delegate on the parent model, before you spend a paid model on it.
 
