@@ -1,10 +1,12 @@
 import assert from "node:assert/strict"
+import { join } from "node:path"
 import { test } from "node:test"
-import { decided, report, scenarios, score, selectScenarios, summarize } from "../.opencode/skills/verify-pstack/scripts/routing-score.mjs"
+import { catalogOf, decided, report, scenarios, score, selectScenarios, summarize } from "../.opencode/skills/verify-pstack/scripts/routing-score.mjs"
 
 let clock = 0
 const tool = (name, input) => ({ type: "tool", name, state: { status: "completed", input }, time: { created: ++clock } })
 const skill = (id) => tool("skill", { id })
+const failedSkill = (id) => ({ ...skill(id), state: { status: "error", input: { id }, error: `Unable to load skill ${id}` } })
 const delegate = (agent = "poteto-agent") => tool("subagent", { agent, description: "build it", prompt: "..." })
 const edit = () => tool("edit", { path: "src/money.js", oldString: "a", newString: "b" })
 const commit = (command = "git add src/money.js && git commit -qm 'Add discounts'") => tool("shell", { command })
@@ -146,6 +148,24 @@ test("the matrix playbook check passes on a read of the expected playbook", () =
   const result = check("matrix:bug@agent", tree(session("poteto-mode", [readPlaybook("bug-fix"), skill("how")])), "playbook")
   assert.equal(result.pass, true)
   assert.equal(result.picked, "bug-fix")
+})
+
+test("a completed skill load of a playbook stem picks that playbook, and a failed load does not", () => {
+  const loaded = check("matrix:bug@build", tree(session("build", [skill("bug-fix"), edit()])), "playbook")
+  assert.deepEqual([loaded.pass, loaded.picked], [true, "bug-fix"])
+  const failed = check("matrix:bug@build", tree(session("build", [failedSkill("bug-fix"), edit()])), "playbook")
+  assert.deepEqual([failed.pass, failed.picked], [false, null])
+})
+
+test("a playbook stem counts as a pick only when the runtime catalog lists it as loadable", () => {
+  const claude = { ...tree(session("claude", [skill("bug-fix"), edit()])), catalog: catalogOf(join(import.meta.dirname, "..", "src", "skills"), ["how"]) }
+  assert.equal(check("matrix:bug@cc-slash", claude, "playbook").picked, null)
+})
+
+test("stay_out fails on a playbook loaded as a skill", () => {
+  const result = check("matrix:typo@build", tree(session("build", [skill("bug-fix"), edit()])), "stay_out")
+  assert.deepEqual([result.pass, result.picked], [false, "bug-fix"])
+  assert.match(result.detail, /hidden skills bug-fix$/)
 })
 
 test("a playbook or SKILL.md read through the shell counts as a read or a load", () => {

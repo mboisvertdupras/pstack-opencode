@@ -25,6 +25,7 @@ function toolEvents(exported) {
         const event = {
           time,
           skill: part.name === "skill" ? (input.id ?? input.name) : undefined,
+          loaded: part.name === "skill" && part.state?.status === "completed",
           delegate: part.name === "subagent" ? input.agent : undefined,
           edit: EDIT_TOOLS.has(part.name),
           commit: SHELL_TOOLS.has(part.name) && GIT_COMMIT.test(input.command ?? ""),
@@ -55,14 +56,21 @@ function stepOnes(playbooks) {
     .map(([stem, step]) => [stem, normalize(step).slice(0, STEP_PREFIX)])
 }
 
-export const catalogOf = (skillsRoot, pstackIDs) => ({ pstack: pstackIDs, stepOnes: stepOnes(join(skillsRoot, MODE_AGENT, "playbooks")) })
+export const catalogOf = (skillsRoot, pstackIDs, playbookIDs = []) => ({
+  pstack: pstackIDs,
+  playbooks: playbookIDs,
+  stepOnes: stepOnes(join(skillsRoot, MODE_AGENT, "playbooks")),
+})
 
+const OPENCODE_SKILLS = readSkills(SKILLS)
 const OPENCODE_CATALOG = catalogOf(
   SKILLS,
-  readSkills(SKILLS)
-    .filter((skill) => !skill.autoinvoke)
-    .map((skill) => skill.id),
+  OPENCODE_SKILLS.filter((skill) => !skill.autoinvoke).map((skill) => skill.id),
+  OPENCODE_SKILLS.filter((skill) => skill.kind === "playbook").map((skill) => skill.id),
 )
+
+// Records saved before playbooks became skills carry a catalog with no `playbooks` list.
+const openedPlaybook = (event, catalog) => event.playbook ?? (event.loaded && catalog.playbooks?.includes(event.skill) ? event.skill : undefined)
 
 const changedFiles = (event) => event.edit || event.commit
 const codeAnchors = ({ parent, sessions }) => [
@@ -154,14 +162,14 @@ export const checks = {
   },
 
   playbook({ parent, catalog }, { expect }) {
-    const read = parent.events.map((event) => event.playbook).filter(Boolean)
+    const read = parent.events.map((event) => openedPlaybook(event, catalog)).filter(Boolean)
     const todos = parent.events.find((event) => event.todos)?.todos ?? []
     const listed = catalog.stepOnes
       .filter(([, step]) => todos.some((todo) => todo.includes(step)))
       .map(([stem]) => stem)
     const picked = read[0] ?? listed[0] ?? null
     const pass = expect.playbook === null ? picked === null : read.includes(expect.playbook) || listed.includes(expect.playbook)
-    return { pass, picked, detail: `picked ${picked ?? "none"}; read ${read.join(", ") || "none"}; todos match ${listed.join(", ") || "none"}` }
+    return { pass, picked, detail: `picked ${picked ?? "none"}; opened ${read.join(", ") || "none"}; todos match ${listed.join(", ") || "none"}` }
   },
 
   skills(view, { expect }) {
@@ -177,7 +185,7 @@ export const checks = {
   },
 
   stay_out(view, { attaches }) {
-    const read = [...new Set(view.sessions.flatMap((session) => session.events.map((event) => event.playbook)).filter(Boolean))]
+    const read = [...new Set(view.sessions.flatMap((session) => session.events.map((event) => openedPlaybook(event, view.catalog))).filter(Boolean))]
     const hidden = hiddenLoads(view, attaches)
     return { pass: read.length === 0 && hidden.length === 0, picked: read[0] ?? null, detail: `playbooks ${read.join(", ") || "none"}; hidden skills ${hidden.join(", ") || "none"}` }
   },
