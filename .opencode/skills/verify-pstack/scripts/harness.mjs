@@ -82,6 +82,10 @@ async function settle(state, sessionID, deadline) {
 
 const locationQuery = (state) => `location%5Bdirectory%5D=${encodeURIComponent(state.proj)}`
 const srcSkills = () => readdirSync(join(SRC, "skills")).filter((name) => existsSync(join(SRC, "skills", name, "SKILL.md")))
+const srcPlaybooks = () =>
+  readdirSync(join(SRC, "skills", "poteto-mode", "playbooks"))
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => name.slice(0, -".md".length))
 const pstackSkills = (state) => api(state, ["GET", `/api/skill?${locationQuery(state)}`]).filter((skill) => skill.path.startsWith(join(SRC, "skills")))
 const evidencePath = (state, name) => join(state.evidence, name)
 
@@ -225,8 +229,11 @@ const commands = {
     if (alive) {
       const info = api(state, ["GET", "/api/info"])
       check(Boolean(info), `server ${state.url} answers /api/info${info?.version ? ` (OpenCode ${info.version})` : ""}`)
-      const skills = pstackSkills(state)
-      check(skills.length === srcSkills().length, `${skills.length} of ${srcSkills().length} pstack skills registered from ${join(SRC, "skills")}`)
+      const registered = new Set(pstackSkills(state).map((skill) => skill.id))
+      for (const [kind, ids] of [["skills", srcSkills()], ["playbooks", srcPlaybooks()]]) {
+        const missing = ids.filter((id) => !registered.has(id))
+        check(missing.length === 0, `${ids.length - missing.length} of ${ids.length} pstack ${kind} registered from ${join(SRC, "skills")}${missing.length ? `, missing ${missing.join(", ")}` : ""}`)
+      }
       const agents = api(state, ["GET", `/api/agent?${locationQuery(state)}`])
       const modes = Object.fromEntries(agents.map((agent) => [agent.id, agent.mode]))
       check(modes["poteto-mode"] === "primary" && modes["poteto-agent"] === "subagent" && modes["comment-sicko"] === "subagent", `agents poteto-mode=${modes["poteto-mode"]} poteto-agent=${modes["poteto-agent"]} comment-sicko=${modes["comment-sicko"]}`)

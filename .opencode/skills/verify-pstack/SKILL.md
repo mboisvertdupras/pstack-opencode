@@ -47,7 +47,7 @@ Run this first, and again whenever anything looks off. It is read-only.
 $H doctor
 ```
 
-It checks that the server this run started is alive, that `/api/info` answers, that every `src/skills` skill is registered from `src/`, that the three agents have the right modes, and that every non-principle skill has a command. Every line must read `ok`. A count short of the total means a user skill shadows a pstack ID. See Gotchas.
+It checks that the server this run started is alive, that `/api/info` answers, that every `src/skills` skill and every `poteto-mode` playbook is registered from `src/`, that the three agents have the right modes, and that every non-principle skill has a command. Every line must read `ok`. A count short of the total means a user skill shadows a pstack ID. See Gotchas.
 
 ## Drive
 
