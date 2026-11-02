@@ -148,6 +148,16 @@ test("the matrix playbook check passes on a read of the expected playbook", () =
   assert.equal(result.picked, "bug-fix")
 })
 
+test("a playbook or SKILL.md read through the shell counts as a read or a load", () => {
+  const root = "/tmp/pin/skills"
+  const direct = check("matrix:feature@cc-slash", tree(session("build", [commit(`git ls-files; cat ${root}/poteto-mode/playbooks/feature.md`)])), "playbook")
+  assert.deepEqual([direct.pass, direct.picked], [true, "feature"])
+  const cd = check("matrix:feature@cc-slash", tree(session("build", [commit(`cd ${root}/poteto-mode/playbooks/ && cat feature.md`)])), "playbook")
+  assert.equal(cd.pass, true)
+  const loaded = check("matrix:feature@cc-slash", tree(session("build", [commit(`cd ${root} && cat how/SKILL.md`), edit()])), "skills")
+  assert.equal(loaded.pass, true)
+})
+
 test("the matrix playbook check passes when the first todowrite carries step 1, whitespace and backticks aside", () => {
   const result = check("matrix:feature@build", tree(session("build", [todos("Load the how skill with the  skill tool\nand run it over the affected subsystem.", "Name the data shape")])), "playbook")
   assert.deepEqual([result.pass, result.picked], [true, "feature"])

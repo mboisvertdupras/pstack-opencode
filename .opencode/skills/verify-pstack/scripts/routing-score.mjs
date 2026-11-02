@@ -18,24 +18,32 @@ function toolEvents(exported) {
     if (message.type !== "assistant" || !Array.isArray(message.content)) return []
     return message.content
       .filter((part) => part.type === "tool")
-      .map((part) => {
+      .flatMap((part) => {
         const input = part.state?.input ?? {}
-        return {
-          time: part.time?.created ?? message.time?.created ?? 0,
+        const time = part.time?.created ?? message.time?.created ?? 0
+        const read = part.name === "read" ? (input.path ?? input.filePath ?? "") : SHELL_TOOLS.has(part.name) ? (input.command ?? "") : ""
+        const event = {
+          time,
           skill: part.name === "skill" ? (input.id ?? input.name) : undefined,
           delegate: part.name === "subagent" ? input.agent : undefined,
           edit: EDIT_TOOLS.has(part.name),
           commit: SHELL_TOOLS.has(part.name) && GIT_COMMIT.test(input.command ?? ""),
-          playbook: part.name === "read" ? playbookOf(input.path ?? input.filePath) : undefined,
+          playbook: playbooksIn(read)[0],
           todos: part.name === "todowrite" ? (input.todos ?? []).map((todo) => normalize(todo.content ?? "")) : undefined,
         }
+        return [event, ...skillFilesIn(read).map((skill) => ({ time, skill }))]
       })
   })
 }
 
 const sessionView = (exported) => ({ exported, agent: exported.info?.agent, events: toolEvents(exported) })
 
-const playbookOf = (path) => path?.match(/poteto-mode\/playbooks\/([\w-]+)\.md$/)?.[1]
+// A model can read a playbook or a SKILL.md through the shell (`cat`, or `cd playbooks && cat x.md`); the content reaches it either way.
+const playbooksIn = (text) => {
+  const at = text.indexOf("poteto-mode/playbooks")
+  return at < 0 ? [] : [...text.slice(at).matchAll(/([\w-]+)\.md\b/g)].map(([, stem]) => stem)
+}
+const skillFilesIn = (text) => [...text.matchAll(/([\w-]+)\/SKILL\.md\b/g)].map(([, id]) => id)
 const normalize = (text) => text.replace(/[`*_]/g, "").replace(/\s+/g, " ").trim().toLowerCase()
 const STEP_PREFIX = 60
 
