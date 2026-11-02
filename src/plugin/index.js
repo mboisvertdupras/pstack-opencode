@@ -60,8 +60,8 @@ export default {
     const skillsInOrder = inOrder()
     const sessionState = (sessionID) =>
       skillsInOrder(sessionID, async () => {
-        const { playbook, loaded = [], ran = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
-        return { mode: await commandedMode(sessionID), playbook, loaded, ran }
+        const { playbook, skip, loaded = [], ran = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
+        return { mode: await commandedMode(sessionID), playbook, skip, loaded, ran }
       })
     const record = (sessionID, event) =>
       skillsInOrder(sessionID, async () => {

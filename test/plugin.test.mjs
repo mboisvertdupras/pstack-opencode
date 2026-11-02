@@ -254,6 +254,10 @@ const ran = (sessionID, command) => ({ ...shell(sessionID, "build", command), st
 const BUG_FIX_GATE =
   "pstack: the Bug fix playbook runs the `how` and `why` skills before any code change. Load `how` with the `skill` tool and run it, then load `why` with the `skill` tool and run it, then retry this call."
 
+const PLAYBOOK_FIRST =
+  "pstack: poteto mode runs every task through a playbook. Load the matching playbook with the `skill` tool (Bug fix is `bug-fix`) and follow its steps. For a fully specified one-line edit, add a todo `no playbook: <reason>` instead. Then retry this call."
+const PLAYBOOK_FIRST_COMMIT = PLAYBOOK_FIRST.replace(/\.$/, " as its own `git commit` command, because this whole shell command was rejected.")
+
 async function potetoSession(storage) {
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage })
   await plugin.setup(ctx)
@@ -305,7 +309,7 @@ test("reading a playbook file records it as the session's playbook, and a failed
   const state = await potetoSession()
   const read = (path, status = "completed") => ({ tool: "read", sessionID: "s1", agent: "build", input: { path }, status })
   await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md", "error"))
-  await state.hooks["execute.before"](edit("s1"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
 
   await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md"))
   await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /the Feature playbook runs the `how` and `architect` skills/)
@@ -313,12 +317,78 @@ test("reading a playbook file records it as the session's playbook, and a failed
   await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /`how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then load `architect`/)
 })
 
-test("a playbook with no requires, and a poteto-mode session with no playbook, edit freely", async () => {
+test("a playbook with no requires edits freely", async () => {
   const state = await potetoSession()
-  await state.hooks["execute.before"](edit("s1"))
   await state.hooks["execute.after"](loaded("s1", "build", "prototype"))
   await state.hooks["execute.before"](edit("s1"))
   await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
+})
+
+const todos = (sessionID, ...contents) => ({ tool: "todowrite", sessionID, agent: "build", input: { todos: contents.map((content) => ({ content, status: "pending" })) }, status: "completed" })
+const COMMIT = "git commit -m a"
+
+test("a /poteto-mode session holds code actions until a playbook loads or a todo says no playbook", async () => {
+  const state = await potetoSession()
+  for (const action of [edit("s1"), delegate("s1", "poteto-agent"), delegate("s1", "general")]) {
+    await assert.rejects(async () => state.hooks["execute.before"](action), { message: PLAYBOOK_FIRST })
+  }
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), { message: `${PLAYBOOK_FIRST_COMMIT}` })
+
+  await state.hooks["execute.after"](todos("s1", "Fix the bug"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
+  await state.hooks["execute.after"]({ ...todos("s1", "  No Playbook: one-line typo"), status: "error" })
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
+
+  await state.hooks["execute.after"](todos("s1", "Look around", "  No Playbook: one-line typo"))
+  await state.hooks["execute.before"](edit("s1"))
+  await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), /load the `deslop` skill/)
+  await state.hooks["execute.after"](loaded("s1", "build", "deslop"))
+  await state.hooks["execute.before"](shell("s1", "build", COMMIT))
+})
+
+test("a playbook loaded after the skip, or instead of it, hands off to the playbook's own gate", async () => {
+  const state = await potetoSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: BUG_FIX_GATE })
+
+  const skipped = await potetoSession()
+  await skipped.hooks["execute.after"](todos("s1", "no playbook: typo"))
+  await skipped.hooks["execute.before"](edit("s1"))
+  await skipped.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
+  await assert.rejects(async () => skipped.hooks["execute.before"](edit("s1")), { message: BUG_FIX_GATE })
+})
+
+test("the playbook-first rule never holds reads, shell, explore, skill, or a plain build or delegate session", async () => {
+  const state = await potetoSession()
+  await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js"))
+  await state.hooks["execute.before"](readOf("s1", undefined, "grep"))
+  await state.hooks["execute.before"](shell("s1", "build", "printf x > src/money.js"))
+  await state.hooks["execute.before"](delegate("s1", "explore"))
+  for (const tool of ["skill", "todowrite"]) await state.hooks["execute.before"]({ tool, sessionID: "s1", agent: "build", input: {} })
+
+  const { ctx, state: plain } = fakeContext({ sessions: { s2: { agent: "build" }, s3: { agent: "poteto-agent" } } })
+  await plugin.setup(ctx)
+  await plain.hooks["execute.before"](edit("s2"))
+  await plain.hooks["execute.before"](edit("s3", "poteto-agent"))
+  await plain.hooks["execute.before"](delegate("s3", "poteto-agent", "poteto-agent"))
+})
+
+test("the poteto-mode agent holds code actions without a playbook", async () => {
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "poteto-mode" } } })
+  await plugin.setup(ctx)
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1", "poteto-mode")), { message: PLAYBOOK_FIRST })
+  await state.hooks["execute.after"](todos("s1", "no playbook: typo"))
+  await state.hooks["execute.before"](edit("s1", "poteto-mode"))
+})
+
+test("the no-playbook skip survives a plugin restart on the same storage", async () => {
+  const first = await potetoSession()
+  await first.hooks["execute.after"](todos("s1", "no playbook: typo"))
+
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
+  await plugin.setup(ctx)
+  await state.hooks["execute.before"](edit("s1"))
 })
 
 test("the poteto-mode agent is gated, and plain build sessions and delegates are not", async () => {

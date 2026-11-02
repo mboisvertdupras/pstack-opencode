@@ -249,6 +249,13 @@ test("stay_out allows the poteto-mode attachment that /poteto-mode puts on the f
   assert.equal(check("matrix:typo@slash", tree(session("build", [edit()], { skills: ["poteto-mode"] })), "stay_out").pass, true)
 })
 
+test("stay_out passes when the only pstack trace is a no playbook todo", () => {
+  for (const id of ["matrix:typo@agent", "matrix:question@agent"]) {
+    assert.equal(check(id, tree(session("poteto-mode", [todos("no playbook: one-line typo"), edit()], { skills: ["poteto-mode"] })), "stay_out").pass, true, id)
+  }
+  assert.equal(check("matrix:typo@build", tree(session("build", [todos("no playbook: one-line typo"), edit()])), "stay_out").pass, true)
+})
+
 test("an early-stopped matrix run is scored, and the table shows checks and the picked playbook", () => {
   const stopped = session("poteto-mode", [readPlaybook("feature"), edit()])
   stopped.messages.push({ type: "assistant", error: { type: "aborted", message: "Step interrupted" }, content: [] })

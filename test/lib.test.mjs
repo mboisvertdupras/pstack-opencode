@@ -183,6 +183,32 @@ test("the act gate names each unfinished required skill in order with how to fin
   assert.equal(actGate({ ...session, playbook: "gone" }, editBy("build"), CATALOG), undefined)
 })
 
+test("with no playbook or skip recorded, poteto mode holds code actions only, with the commit suffix on a commit", () => {
+  const bare = { mode: true, loaded: [], ran: [] }
+  const commit = { tool: "shell", agent: "build", input: { command: "git commit -m a" } }
+  assert.match(actGate(bare, editBy("build"), CATALOG), /^pstack: poteto mode runs every task through a playbook\. .*`no playbook: <reason>` instead\. Then retry this call\.$/)
+  assert.match(actGate(bare, commit, CATALOG), /Then retry this call as its own `git commit` command, because this whole shell command was rejected\.$/)
+  assert.ok(actGate(bare, spawn("general"), CATALOG))
+  assert.ok(actGate({ ...bare, mode: false }, editBy("poteto-mode"), CATALOG))
+  for (const event of [spawn("explore"), { tool: "read", agent: "build", input: {} }, { tool: "shell", agent: "build", input: { command: "ls" } }, { tool: "skill", agent: "build", input: {} }]) {
+    assert.equal(actGate(bare, event, CATALOG), undefined)
+  }
+  assert.equal(actGate({ ...bare, mode: false }, editBy("build"), CATALOG), undefined)
+  assert.equal(actGate({ ...bare, skip: true }, editBy("build"), CATALOG), undefined)
+  assert.match(actGate({ ...bare, skip: true, playbook: "perf" }, editBy("build"), CATALOG), /Perf issue playbook/)
+  assert.match(actGate({ ...bare, playbook: "perf" }, editBy("build"), CATALOG), /Perf issue playbook/)
+})
+
+test("a completed todowrite with a no playbook item records the skip, trimmed and case-insensitive", () => {
+  const todos = (status, ...contents) => ({ tool: "todowrite", input: { todos: contents.map((content) => ({ content })) }, status })
+  assert.deepEqual(withEvent(undefined, todos("completed", "x", "  No Playbook: typo"), CATALOG), { loaded: [], ran: [], skip: true })
+  assert.deepEqual(withEvent({ playbook: "perf", loaded: ["how"], ran: [] }, todos("completed", "no playbook: typo"), CATALOG), { playbook: "perf", loaded: ["how"], ran: [], skip: true })
+  const skipped = withEvent(undefined, todos("completed", "no playbook: typo"), CATALOG)
+  assert.equal(withEvent(skipped, todos("completed", "no playbook: again"), CATALOG), skipped)
+  assert.equal(withEvent(undefined, todos("error", "no playbook: typo"), CATALOG), undefined)
+  assert.equal(withEvent(undefined, todos("completed", "no playbook typo", "Fix the no playbook: case"), CATALOG), undefined)
+})
+
 test("a read-gated playbook holds the parent's reads until its required skills run, and other playbooks never hold reads", () => {
   const read = { tool: "read", agent: "build", input: { path: "src/a.js" } }
   const asking = { mode: true, playbook: "ask", loaded: ["how"], ran: [] }

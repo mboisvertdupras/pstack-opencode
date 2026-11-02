@@ -203,10 +203,14 @@ export const RAN = {
 
 const isEvidence = (event) => Object.values(RAN).some((rule) => rule.by(event))
 
-export const isSkillEvent = (event, skills) => event.status === "completed" && (Boolean(loadedSkill(event, skills)) || isEvidence(event))
+export const skipsPlaybook = ({ tool, input, status }) =>
+  status === "completed" && tool === "todowrite" && (input.todos ?? []).some((todo) => /^no playbook:/i.test(String(todo.content ?? "").trim()))
+
+export const isSkillEvent = (event, skills) => event.status === "completed" && (Boolean(loadedSkill(event, skills)) || isEvidence(event) || skipsPlaybook(event))
 
 export function withEvent(record, event, skills) {
   const session = { loaded: [], ran: [], ...record }
+  if (skipsPlaybook(event)) return session.skip ? record : { ...session, skip: true }
   const id = loadedSkill(event, skills)
   if (skills.get(id)?.kind === "playbook") return session.playbook === id ? record : { ...session, playbook: id }
   if (id) return session.loaded.includes(id) ? record : { ...session, loaded: [...session.loaded, id] }
@@ -225,8 +229,12 @@ const HOLDS = {
   reads: { reason: (skills) => `reads the code through the ${skills}`, then: (event, missing) => `use ${missing.length === 1 ? "its" : "their"} findings instead of reading files yourself` },
 }
 
+const PLAYBOOK_FIRST =
+  "pstack: poteto mode runs every task through a playbook. Load the matching playbook with the `skill` tool (Bug fix is `bug-fix`) and follow its steps. For a fully specified one-line edit, add a todo `no playbook: <reason>` instead. Then retry this call"
+
 export function actGate(session, event, skills) {
   if (!(session.mode || event.agent === MODE_AGENT)) return undefined
+  if (!session.playbook && !session.skip && isCodeAction(event)) return `${PLAYBOOK_FIRST}${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}.`
   const playbook = skills.get(session.playbook)
   const held = isCodeAction(event) ? "code" : isReadAction(event) && playbook?.gates.includes("reads") ? "reads" : undefined
   if (!held) return undefined
