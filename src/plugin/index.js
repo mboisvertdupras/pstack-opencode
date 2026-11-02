@@ -12,7 +12,6 @@ import {
   commitGate,
   entryOps,
   isCodeAction,
-  isCommit,
   isSkillEvent,
   modeEntry,
   modelsEntry,
@@ -150,7 +149,7 @@ export default {
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        if (isCodeAction(event) || isCommit(event)) {
+        if (isCodeAction(event)) {
           const session = await sessionState(event.sessionID)
           blocked = actGate(session, event, catalog) ?? commitGate(session, event)
         }

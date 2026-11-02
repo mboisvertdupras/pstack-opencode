@@ -167,7 +167,7 @@ const CODE_TOOLS = new Set(["edit", "write", "apply_patch", "patch", "multiedit"
 const CODE_AGENTS = new Set(["poteto-agent", "general"])
 const SKILL_FILE = /\/skills\/(?:poteto-mode\/playbooks\/([a-z0-9-]+)\.md|([a-z0-9-]+)\/SKILL\.md)$/
 
-export const isCodeAction = ({ tool, input }) => CODE_TOOLS.has(tool) || (tool === "subagent" && CODE_AGENTS.has(input.agent))
+export const isCodeAction = (event) => CODE_TOOLS.has(event.tool) || (event.tool === "subagent" && CODE_AGENTS.has(event.input.agent)) || isCommit(event)
 
 export function loadedSkill({ tool, input, status }, skills) {
   if (status !== "completed") return undefined
@@ -227,7 +227,7 @@ export function actGate(session, event, skills) {
     .map((id) => (session.loaded.includes(id) ? `\`${id}\` is loaded but hasn't run: ${RAN[id].finish}` : `load \`${id}\` with the \`skill\` tool and run it`))
     .join(", then ")
   const names = listed(missing.map((id) => `\`${id}\``))
-  return `pstack: the ${playbook.title} playbook runs the ${names} skill${missing.length === 1 ? "" : "s"} before any code change. ${steps[0].toUpperCase()}${steps.slice(1)}, then retry this call.`
+  return `pstack: the ${playbook.title} playbook runs the ${names} skill${missing.length === 1 ? "" : "s"} before any code change. ${steps[0].toUpperCase()}${steps.slice(1)}, then retry this call${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}.`
 }
 
 export function entryOps(want, have) {

@@ -344,10 +344,11 @@ test("the playbook and the loaded and run skills survive a plugin restart on the
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
   await plugin.setup(ctx)
   await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /runs the `why` skill before any code change\. Load `why`/)
-  await state.hooks["execute.before"](shell("s1", "build", "git commit -m a"))
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", "git commit -m a")), /runs the `why` skill.*as its own `git commit` command/)
   await state.hooks["execute.after"](loaded("s1", "build", "why"))
   await state.hooks["execute.after"](ran("s1", "git blame src/money.js"))
   await state.hooks["execute.before"](edit("s1"))
+  await state.hooks["execute.before"](shell("s1", "build", "git commit -m a"))
 })
 
 test("loads that finish together all land in storage", async () => {
