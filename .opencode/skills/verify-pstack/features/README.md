@@ -15,6 +15,7 @@ This folder is the maintained source for verifying what a pstack user sees in Op
 - Each recipe starts a fresh session unless it says to continue one. Carry the `session <sid>` that `run` and `command` print.
 - Prompts in recipes are literal. Keep them unchanged, because they tell the model not to do real work.
 - Never drive a server this run did not start.
+- A recipe that edits, delegates, or commits under `--agent poteto-mode` or `/poteto-mode` meets the [gates](./gates.md). Recipes outside the gates file run under `build` to stay clear of them.
 
 ## Proof and skip reporting
 
@@ -35,8 +36,9 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 ## Features
 
-- [Slash commands](./slash-commands.md) covers `/<skill>` attaching its skill, principles having no command, and the path fallback when a user skill shadows a pstack ID.
-- [poteto-mode agent](./poteto-mode-agent.md) covers the persistent mode, its instruction entry, and switching away.
-- [Model roles](./model-roles.md) covers `pstack-models.md` reaching every session and following edits and deletion.
-- [Subagents](./subagents.md) covers `poteto-agent` loading poteto-mode by ID and `comment-sicko` reporting without editing.
+- [Slash commands](./slash-commands.md) covers `/<skill>` attaching its skill, principles and playbooks having no command, and the path fallback when a user skill shadows a pstack ID.
+- [poteto-mode agent](./poteto-mode-agent.md) covers the persistent mode, its instruction entry, switching away, and `/poteto-mode` keeping the mode on.
+- [Model roles](./model-roles.md) covers `pstack-models.md` reaching every session, following edits and deletion, the code-delegate ladder, and the cross-family pool.
+- [Subagents](./subagents.md) covers `poteto-agent` loading poteto-mode by ID, `comment-sicko` reporting without editing, and nested spawns.
+- [Gates](./gates.md) covers playbook-first, required skills loaded and run, the read gate, the `no playbook:` skip, and the `deslop` commit gate.
 - [Installer](./installer.md) covers linking, rerunning, refusing to overwrite, and uninstalling.

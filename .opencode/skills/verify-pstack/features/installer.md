@@ -1,6 +1,6 @@
 # Installer
 
-`npm run install-pstack` links `src/` into OpenCode as the `pstack` plugin and links the three agents. It copies nothing, is safe to rerun, refuses to overwrite a file it did not create, and `--uninstall` removes only its own links. A link from an earlier install that points into this repo's old `dist/` counts as its own and moves to `src/`. `--project <dir>` installs into that project's `.opencode/` instead.
+`npm run install-pstack` links `src/` into OpenCode as the `pstack` plugin and links the three agents. It copies nothing and is safe to rerun. It counts any symlink that points into this repo's `src/` or old `dist/` as its own. It refuses to overwrite anything else, and `--uninstall` removes only its own links. A link from an earlier install that points into `dist/` moves to `src/`. `--project <dir>` installs into that project's `.opencode/` instead.
 
 ## Sub-features
 
@@ -27,12 +27,12 @@ Preconditions:
 - **Link.** Run `XDG_CONFIG_HOME=$C node scripts/install.mjs`. It prints four `linked` lines, and `ls -l $C/opencode/plugins $C/opencode/agents` shows symlinks into `src/`.
 - **Advice.** The same output lists `"todo": true` and `"subagent_depth": 2` and the `/setup-pstack` step.
 - **Rerun.** Run it again. It prints four `ok` lines.
-- **Migrate.** Run the uninstall, then `ln -s $PWD/dist $C/opencode/plugins/pstack` and `ln -s $PWD/dist/agents/poteto-mode.md $C/opencode/agents/poteto-mode.md`. Install with `--dry-run`. It prints `moved` for both and changes nothing. Install again without it. It prints two `moved` and two `linked` lines, and both links now point into `src/`.
+- **Migrate.** Run the uninstall, then `mkdir -p $C/opencode/plugins $C/opencode/agents`, `ln -s $PWD/dist $C/opencode/plugins/pstack` and `ln -s $PWD/dist/agents/poteto-mode.md $C/opencode/agents/poteto-mode.md`. Install with `--dry-run`. It prints `moved` for both and changes nothing. Install again without it. It prints two `moved` and two `linked` lines, and both links now point into `src/`.
 - **Refuse.** Run `XDG_CONFIG_HOME=$C node scripts/install.mjs --uninstall`, then `mkdir -p $C/opencode/agents && echo mine > $C/opencode/agents/poteto-agent.md`, then install again. It prints a `FAIL` line for that file and exits `1`. `cat` shows `mine` unchanged.
-- **Uninstall.** Run the uninstall again. It prints `keep` for `poteto-agent.md` and removes nothing else. Remove `$C` afterward.
+- **Uninstall.** Run the uninstall again. It prints `keep` for `poteto-agent.md` and `removed` for the three links the refused install made. `cat` still shows `mine`. Remove `$C` afterward.
 
 ## Gotchas
 
 - Never run the installer without `XDG_CONFIG_HOME` while verifying. It writes to the user's real `~/.config/opencode`.
-- The shadow warning lists real skills in `~/.claude/skills` and `~/.agents/skills`, whatever `XDG_CONFIG_HOME` says.
+- The shadow warning lists real skills in `~/.claude/skills` and `~/.agents/skills`, whatever `XDG_CONFIG_HOME` says, plus the config folder's own `skills/`. With `--project`, it also scans that project's `.claude`, `.agents`, and `.opencode` skills.
 - A partial install after a refusal leaves the links it made. Uninstall to clear them.
