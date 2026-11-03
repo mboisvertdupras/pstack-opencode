@@ -64,7 +64,7 @@ Correct the log, not the story. The audit never edits or removes a row, even an 
 
 ## Cross-model review of the trail
 
-Before handing back, spawn a subagent on a different model family from the one that did the work. Self-review is not a substitute. Put the log path and this run's session ID in the brief. The subagent reads the audit trail and the run's transcript with `opencode session export <id>`, then flags what the user should pay attention to. Not a redo of the work, a scan for what's suboptimal or risky. Pick each subagent's reasoning level for the job, per the Subagents section of the `poteto-mode` skill.
+Before handing back, spawn a subagent on a different model family from the one that did the work. Pick its model from the `arena cross-judge pool` line the way the `arena` skill's Phase C picks a judge, skipping the family that did the work. Self-review is not a substitute. Put the log path and this run's session ID in the brief. The subagent reads the audit trail and the run's transcript with `opencode session export <id>`, then flags what the user should pay attention to. Not a redo of the work, a scan for what's suboptimal or risky. Pick each subagent's reasoning level for the job, per the Subagents section of the `poteto-mode` skill.
 
 - Decisions logged with weak or absent evidence.
 - Verification steps skipped or claimed without proof in the transcript.
