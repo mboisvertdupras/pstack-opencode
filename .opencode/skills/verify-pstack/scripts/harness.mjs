@@ -86,7 +86,7 @@ const srcPlaybooks = () =>
   readdirSync(join(SRC, "skills", "poteto-mode", "playbooks"))
     .filter((name) => name.endsWith(".md"))
     .map((name) => name.slice(0, -".md".length))
-const pstackSkills = (state) => api(state, ["GET", `/api/skill?${locationQuery(state)}`]).filter((skill) => skill.path.startsWith(join(SRC, "skills")))
+const pstackSkills = (state) => api(state, ["GET", `/api/skill?${locationQuery(state)}`]).filter((skill) => skill.path.startsWith(join(state.pluginRoot ?? SRC, "skills")))
 const evidencePath = (state, name) => join(state.evidence, name)
 
 function save(state, name, value) {
@@ -173,9 +173,17 @@ const commands = {
     mkdirSync(proj)
     mkdirSync(evidence, { recursive: true })
 
-    const install = spawnSync("node", [join(REPO, "scripts", "install.mjs")], { env: { ...process.env, XDG_CONFIG_HOME: config }, encoding: "utf8" })
-    if (install.status !== 0) die(`install.mjs exited ${install.status}: ${install.stdout}${install.stderr}`)
-    writeFileSync(join(config, "opencode", "opencode.json"), `${JSON.stringify({ experimental: { todo: true, subagent_depth: 2 } }, null, 2)}\n`)
+    const settings = { experimental: { todo: true, subagent_depth: 2 } }
+    if (process.env.PSTACK_VERIFY_INSTALL === "package") {
+      const pack = spawnSync("npm", ["pack", "--silent", "--pack-destination", runDir], { cwd: SRC, encoding: "utf8" })
+      if (pack.status !== 0) die(`npm pack exited ${pack.status}: ${pack.stderr}`)
+      if (spawnSync("tar", ["-xzf", join(runDir, pack.stdout.trim().split("\n").pop()), "-C", runDir]).status !== 0) die("tar could not extract the packed plugin")
+      settings.plugins = [join(runDir, "package")]
+    } else {
+      const install = spawnSync("node", [join(REPO, "scripts", "install.mjs")], { env: { ...process.env, XDG_CONFIG_HOME: config }, encoding: "utf8" })
+      if (install.status !== 0) die(`install.mjs exited ${install.status}: ${install.stdout}${install.stderr}`)
+    }
+    writeFileSync(join(config, "opencode", "opencode.json"), `${JSON.stringify(settings, null, 2)}\n`)
     if (process.env.PSTACK_VERIFY_MODELS) copyFileSync(process.env.PSTACK_VERIFY_MODELS, join(config, "opencode", "pstack-models.md"))
 
     // A repo with no commit shares one project ID with every other commitless repo, which mixes their sessions into ours.
@@ -189,7 +197,7 @@ const commands = {
     const server = spawn("opencode", ["serve", "--hostname", "127.0.0.1", "--port", "0"], { cwd: proj, env: { ...process.env, PWD: realpathSync(proj), XDG_CONFIG_HOME: config }, stdio: ["ignore", log, log], detached: true })
     server.unref()
     closeSync(log)
-    const state = { pid: server.pid, runDir, config, proj: realpathSync(proj), evidence, url: undefined, password: undefined }
+    const state = { pid: server.pid, runDir, config, proj: realpathSync(proj), evidence, pluginRoot: settings.plugins?.[0], url: undefined, password: undefined }
     writeFileSync(join(runDir, "state.json"), JSON.stringify(state))
     writeFileSync(LATEST, runDir)
 
@@ -232,7 +240,7 @@ const commands = {
       const registered = new Set(pstackSkills(state).map((skill) => skill.id))
       for (const [kind, ids] of [["skills", srcSkills()], ["playbooks", srcPlaybooks()]]) {
         const missing = ids.filter((id) => !registered.has(id))
-        check(missing.length === 0, `${ids.length - missing.length} of ${ids.length} pstack ${kind} registered from ${join(SRC, "skills")}${missing.length ? `, missing ${missing.join(", ")}` : ""}`)
+        check(missing.length === 0, `${ids.length - missing.length} of ${ids.length} pstack ${kind} registered from ${join(state.pluginRoot ?? SRC, "skills")}${missing.length ? `, missing ${missing.join(", ")}` : ""}`)
       }
       const agents = api(state, ["GET", `/api/agent?${locationQuery(state)}`])
       const modes = Object.fromEntries(agents.map((agent) => [agent.id, agent.mode]))

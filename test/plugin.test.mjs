@@ -1,18 +1,30 @@
 import assert from "node:assert/strict"
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import plugin from "../src/plugin/index.js"
+import { parseFrontmatter } from "../src/plugin/lib.js"
 
 const SRC = join(import.meta.dirname, "..", "src")
 
 // A fake OpenCode plugin context that records what the plugin registers and what it sends.
-function fakeContext({ modelsFile, sessions = {}, registered = [], storage = {} } = {}) {
-  const state = { skills: [], commands: [], hooks: {}, prompts: [], entries: {}, storage }
+function fakeContext({ modelsFile, sessions = {}, registered = [], storage = {}, agents = {} } = {}) {
+  const state = { skills: [], commands: [], hooks: {}, prompts: [], entries: {}, storage, agents: new Map(Object.entries(agents)) }
   const entriesOf = (sessionID) => (state.entries[sessionID] ??= {})
+  const agentEditor = {
+    list: () => [...state.agents.values()],
+    get: (id) => state.agents.get(id),
+    update: (id, fn) => {
+      const draft = structuredClone(state.agents.get(id) ?? coreAgent(id))
+      fn(draft)
+      state.agents.set(id, draft)
+    },
+    remove: (id) => state.agents.delete(id),
+  }
   const ctx = {
     options: { modelsFile: modelsFile ?? join(mkdtempSync(join(tmpdir(), "pstack-")), "missing.md") },
+    agent: { transform: async (fn) => fn(agentEditor) },
     skill: {
       transform: async (fn) => fn({ add: (skill) => state.skills.push(skill) }),
       list: async () => ({ data: [...state.skills, ...registered].reverse() }),
@@ -50,8 +62,70 @@ function fakeContext({ modelsFile, sessions = {}, registered = [], storage = {} 
       },
     },
   }
-  return { ctx, state }
+  return { ctx, state, agentEditor }
 }
+
+const coreAgent = (id) => ({ id, name: id, mode: "primary", hidden: false, permissions: [{ permission: "*", pattern: "*", action: "allow" }], request: { temperature: 0 } })
+
+const bundledBody = (name) => parseFrontmatter(readFileSync(join(SRC, "agents", `${name}.md`), "utf8")).body
+
+test("registers poteto-mode as a primary agent and poteto-agent and comment-sicko as subagents, with their shipped prompts", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  assert.deepEqual([...state.agents.keys()].sort(), ["comment-sicko", "poteto-agent", "poteto-mode"])
+  const mode = state.agents.get("poteto-mode")
+  assert.equal(mode.mode, "primary")
+  assert.equal(mode.color, "#e5c07b")
+  assert.match(mode.description, /^poteto's agent style as a persistent mode\./)
+  assert.equal(mode.system, undefined, "poteto-mode ships no prompt body")
+  const delegate = state.agents.get("poteto-agent")
+  assert.equal(delegate.mode, "subagent")
+  assert.equal(delegate.color, "#e5c07b")
+  assert.equal(delegate.system, bundledBody("poteto-agent"))
+  assert.match(delegate.system, /^# Poteto subagent/)
+  const sicko = state.agents.get("comment-sicko")
+  assert.equal(sicko.mode, "subagent")
+  assert.equal(sicko.color, undefined)
+  assert.equal(sicko.system, bundledBody("comment-sicko"))
+  for (const id of state.agents.keys()) {
+    assert.equal(state.agents.get(id).name, id)
+    assert.equal(state.agents.get(id).hidden, false)
+    assert.deepEqual(state.agents.get(id).permissions, coreAgent(id).permissions, `${id} keeps the core permissions`)
+    assert.deepEqual(state.agents.get(id).request, coreAgent(id).request, `${id} keeps the core request settings`)
+  }
+})
+
+test("an agent already registered under a pstack ID is left as it was", async () => {
+  const mine = { id: "poteto-agent", name: "poteto-agent", description: "mine", mode: "all", hidden: true }
+  const { ctx, state } = fakeContext({ agents: { "poteto-agent": mine, build: coreAgent("build") } })
+  await plugin.setup(ctx)
+  assert.deepEqual(state.agents.get("poteto-agent"), mine)
+  assert.deepEqual(state.agents.get("build"), coreAgent("build"))
+  assert.equal(state.agents.size, 4)
+})
+
+test("setting up twice on the same agents changes nothing the second time", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  const first = structuredClone([...state.agents])
+  await plugin.setup(ctx)
+  assert.equal(state.agents.size, 3)
+  assert.deepEqual([...state.agents], first)
+})
+
+test("a user agent file loaded after the plugin wins on the fields it sets and keeps pstack's others", async () => {
+  const { ctx, state, agentEditor } = fakeContext()
+  await plugin.setup(ctx)
+  agentEditor.update("poteto-mode", (draft) => {
+    draft.description = "my mode"
+    draft.color = "#000000"
+  })
+  const mode = state.agents.get("poteto-mode")
+  assert.equal(mode.description, "my mode")
+  assert.equal(mode.color, "#000000")
+  assert.equal(mode.mode, "primary")
+  assert.equal(state.agents.size, 3)
+})
 
 test("registers every bundled skill and every poteto-mode playbook, hidden unless its frontmatter lets the model invoke it", async () => {
   const { ctx, state } = fakeContext()
