@@ -15,10 +15,8 @@ const configDir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config")
 const target = project ? join(project, ".opencode") : configDir
 const dryRun = flag("--dry-run")
 
-const links = [
-  { at: join(target, "plugins", "pstack"), to: SRC },
-  ...readdirSync(join(SRC, "agents")).map((name) => ({ at: join(target, "agents", name), to: join(SRC, "agents", name) })),
-]
+const plugin = { at: join(target, "plugins", "pstack"), to: SRC }
+const legacyAgentLinks = readdirSync(join(SRC, "agents")).map((name) => ({ at: join(target, "agents", name), to: join(SRC, "agents", name) }))
 
 const REMOVED_DIST = "dist"
 const ownedFolders = [...new Set([REPO, realpathSync(REPO)])].flatMap((root) => [join(root, "src"), join(root, REMOVED_DIST)])
@@ -37,37 +35,37 @@ function linkState(at, to) {
   return linkTextPointsIntoOwnedFolder(points) ? "moved" : "foreign"
 }
 
-const problems = []
-for (const { at, to } of links) {
+function unlink({ at, to }) {
   const state = linkState(at, to)
-  if (flag("--uninstall")) {
-    if (state === "missing") continue
-    if (state === "foreign") {
-      console.log(`keep    ${at} (not a pstack link)`)
-      continue
-    }
-    if (!dryRun) unlinkSync(at)
-    console.log(`removed ${at}`)
-    continue
-  }
-  if (state === "current") {
-    console.log(`ok      ${at}`)
-    continue
-  }
+  if (state === "missing") return
   if (state === "foreign") {
-    problems.push(`${at} already exists and is not this pstack's link. Move it aside, then rerun.`)
-    continue
+    console.log(`keep    ${at} (not a pstack link)`)
+    return
   }
-  if (!dryRun) {
-    mkdirSync(dirname(at), { recursive: true })
-    if (state === "moved") unlinkSync(at)
-    symlinkSync(to, at)
-  }
-  console.log(`${state === "moved" ? "moved " : "linked"}  ${at} -> ${to}`)
+  if (!dryRun) unlinkSync(at)
+  console.log(`removed ${at}`)
 }
-for (const problem of problems) console.log(`FAIL ${problem}`)
-if (problems.length > 0) process.exit(1)
-if (flag("--uninstall")) process.exit(0)
+
+if (flag("--uninstall")) {
+  for (const link of [plugin, ...legacyAgentLinks]) unlink(link)
+  process.exit(0)
+}
+
+const pluginState = linkState(plugin.at, plugin.to)
+if (pluginState === "foreign") {
+  console.log(`FAIL ${plugin.at} already exists and is not this pstack's link. Move it aside, then rerun.`)
+  process.exit(1)
+}
+if (pluginState === "current") console.log(`ok      ${plugin.at}`)
+else {
+  if (!dryRun) {
+    mkdirSync(dirname(plugin.at), { recursive: true })
+    if (pluginState === "moved") unlinkSync(plugin.at)
+    symlinkSync(plugin.to, plugin.at)
+  }
+  console.log(`${pluginState === "moved" ? "moved " : "linked"}  ${plugin.at} -> ${plugin.to}`)
+}
+for (const link of legacyAgentLinks) unlink(link)
 
 // User skills load from directories, which OpenCode layers over plugin skills, so a same-named user skill keeps its ID.
 const roots = [

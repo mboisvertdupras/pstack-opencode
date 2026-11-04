@@ -41,4 +41,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Model roles](./model-roles.md) covers `pstack-models.md` reaching every session, following edits and deletion, the code-delegate ladder, and the cross-family pool.
 - [Subagents](./subagents.md) covers `poteto-agent` loading poteto-mode by ID, `comment-sicko` reporting without editing, and nested spawns.
 - [Gates](./gates.md) covers playbook-first, required skills loaded and run, the read gate, the `no playbook:` skip, and the `deslop` commit gate.
-- [Installer](./installer.md) covers linking, rerunning, refusing to overwrite, and uninstalling.
+- [Installer](./installer.md) covers linking, rerunning, retiring old agent links, refusing to overwrite, and uninstalling.

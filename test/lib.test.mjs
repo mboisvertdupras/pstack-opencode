@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { actGate, commandDescription, commandPrompt, entryOps, loadedSkill, parseFrontmatter, playbookDescriptions, playbookSkills, readSkills, withEvent } from "../src/plugin/lib.js"
+import { actGate, commandDescription, commandPrompt, entryOps, loadedSkill, parseFrontmatter, playbookDescriptions, playbookSkills, readAgents, readSkills, withEvent } from "../src/plugin/lib.js"
 
 test("frontmatter reads double-quoted, single-quoted, plain, and folded descriptions", () => {
   const quoted = parseFrontmatter('---\nname: how\ndescription: "Use for \\"how does X work\\"."\ndisable-model-invocation: true\n---\n\n# How\n')
@@ -133,6 +133,30 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
   )
   assert.equal(byId.get("untitled")[0].description, "Untitled")
   rmSync(root, { recursive: true, force: true })
+})
+
+test("agents load by filename in order, with their mode, optional color, and body as the prompt", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pstack-agents-"))
+  writeFileSync(join(dir, "b-mode.md"), "---\ndescription: A mode.\nmode: primary\ncolor: \"#e5c07b\"\n---\n")
+  writeFileSync(join(dir, "a-helper.md"), "---\nname: other\ndescription: \"A helper.\"\nmode: 'subagent'\n---\n\n# Helper\n\nDo it.\n")
+  writeFileSync(join(dir, "notes.txt"), "not an agent")
+  assert.deepEqual(readAgents(dir), [
+    { id: "a-helper", description: "A helper.", mode: "subagent", system: "# Helper\n\nDo it.\n" },
+    { id: "b-mode", description: "A mode.", mode: "primary", color: "#e5c07b" },
+  ])
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test("an agent with no description or a mode outside primary, subagent, and all fails naming its file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pstack-agents-"))
+  const path = join(dir, "broken.md")
+  writeFileSync(path, "---\nmode: subagent\n---\nBody\n")
+  assert.throws(() => readAgents(dir), (error) => error.message.includes(path) && /no description/.test(error.message))
+  writeFileSync(path, "---\ndescription: Broken.\nmode: helper\n---\nBody\n")
+  assert.throws(() => readAgents(dir), (error) => error.message.includes(path) && /mode "helper"/.test(error.message))
+  writeFileSync(path, "---\ndescription: Broken.\n---\nBody\n")
+  assert.throws(() => readAgents(dir), (error) => error.message.includes(path) && /mode undefined/.test(error.message))
+  rmSync(dir, { recursive: true, force: true })
 })
 
 test("every shipped playbook registers under its stem with its Playbooks list entry", () => {

@@ -6,14 +6,24 @@ pstack was ported from poteto's [pstack in cursor/plugins](https://github.com/cu
 
 ## Install
 
-Run the installer from this repo. It links `src/` and copies nothing.
+Add the package to `plugins` in `~/.config/opencode/opencode.jsonc`.
+
+```jsonc
+{
+	"plugins": ["pstack-opencode"]
+}
+```
+
+The plugin registers the skills, their slash commands, and the three agents. A file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
+
+To run pstack from a checkout of this repo instead, use the installer. It links `src/` and copies nothing.
 
 ```sh
 npm run install-pstack                         # every project, under ~/.config/opencode
 npm run install-pstack -- --project ~/code/app # one project, under its .opencode/
 ```
 
-The installer links `src/` to `plugins/pstack` and each file in `src/agents` to `agents/`. Rerunning it is safe. It never replaces a file or link it did not create. If an earlier install linked into this repo's `dist/` folder, the installer moves that link to `src/` and prints `moved`. Add `--dry-run` to print what it would do without changing anything.
+The installer links `src/` to `plugins/pstack`. Older installs also linked each agent into `agents/`. The plugin now registers the agents itself, so the installer removes those links and prints `removed`. Rerunning it is safe. It never replaces a file or link it did not create. If an earlier install linked into this repo's `dist/` folder, the installer moves that link to `src/` and prints `moved`. Add `--dry-run` to print what it would do without changing anything.
 
 To uninstall, run `npm run install-pstack -- --uninstall`. It removes only links into this repo's `src/` or the old `dist/`, and it keeps everything else.
 
@@ -38,7 +48,7 @@ Then run `/setup-pstack` once. It finds the models you have and writes a model p
 
 To work in the mode for one message, start with `/poteto-mode <task>`. The other skills run as its steps need them.
 
-To keep the mode on for a whole session, press Tab to the `poteto-mode` agent, or start with `opencode --agent poteto-mode`.
+To keep the mode on for a whole session, press Tab to the `poteto-mode` agent, or start with `opencode --agent poteto-mode`. Both work with the package and with the installer.
 
 Every skill except the `principle-*` skills has a slash command of the same name, such as `/how`, `/why`, `/interrogate`, and `/deslop`.
 
@@ -49,12 +59,12 @@ A user skill with the same ID as a pstack skill keeps that ID in OpenCode. pstac
 ## Layout
 
 ```text
-src/                     The plugin. The installer links this folder.
-src/plugin/              Registers the skills and commands. lib.js is pure, index.js talks to OpenCode.
+src/                     The plugin, published as the pstack-opencode package. The installer links this folder.
+src/plugin/              Registers the skills, commands, and agents. lib.js is pure, index.js talks to OpenCode.
 src/skills/              One folder per skill, each with a SKILL.md
 src/agents/              poteto-mode, poteto-agent, and comment-sicko
 src/LICENSE*             The pstack and cursor-team-kit MIT notices
-scripts/install.mjs      Links src/ into OpenCode, and uninstalls
+scripts/install.mjs      Links src/ into OpenCode, removes old agent links, and uninstalls
 scripts/lint-skills.mjs  Checks skills and agents for product names, Cursor-only tool names, broken links, and bad frontmatter
 test/                    Plugin, installer, and lint tests. skills.test.mjs lints everything in src/.
 .opencode/skills/verify-pstack/  Repo-local skill that drives src/ in a real OpenCode server

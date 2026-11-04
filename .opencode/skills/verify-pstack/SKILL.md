@@ -29,6 +29,8 @@ H=.opencode/skills/verify-pstack/scripts/harness.mjs
 
    It makes a run folder under `$TMPDIR/opencode/pstack-verify/run-*`, with its own OpenCode config folder and a seeded git project holding `math.js`. It installs pstack into that config with `scripts/install.mjs`, sets `experimental.todo` and `experimental.subagent_depth: 2`, and starts `opencode serve` on a free port. It prints `ready` only after every skill in `src/skills` is registered at the project, which takes a few seconds after the port answers.
 
+   `PSTACK_VERIFY_INSTALL=package` checks what a package user sees. It packs `src/` with `npm pack`, extracts the tarball into the run folder, and loads it through `plugins` in the run's `opencode.json`, with no installer and no `agents/` folder.
+
    `PSTACK_VERIFY_SEED=<dir>` seeds the project with a copy of that folder instead of `math.js`. `PSTACK_VERIFY_MODELS=<file>` copies a model file to the run's `pstack-models.md`. `up` prints the run folder on its first line. A script that runs several servers passes it as `PSTACK_VERIFY_RUN` to every later call, because the shared `latest` pointer belongs to whichever `up` ran last.
 
 3. Load the run's paths when a step needs them.

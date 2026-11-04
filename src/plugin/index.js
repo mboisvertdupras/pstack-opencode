@@ -16,6 +16,7 @@ import {
   isSkillEvent,
   modeEntry,
   modelsEntry,
+  readAgents,
   readSkills,
   withEvent,
 } from "./lib.js"
@@ -28,6 +29,7 @@ export default {
   id: "pstack",
   async setup(ctx) {
     const skills = readSkills(join(ROOT, "skills"))
+    const agents = readAgents(join(ROOT, "agents"))
     const configDir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "opencode")
     const modelsFile = ctx.options?.modelsFile ?? join(configDir, "pstack-models.md")
 
@@ -124,6 +126,18 @@ export default {
             const attached = attach ? [...(prompt.skills ?? []), { id: skill.id }] : prompt.skills
             await ctx.session.prompt({ ...prompt, sessionID, delivery, text, ...(attached ? { skills: attached } : {}) })
           },
+        })
+      }
+    })
+
+    await ctx.agent.transform((editor) => {
+      for (const agent of agents) {
+        if (editor.get(agent.id)) continue
+        editor.update(agent.id, (draft) => {
+          draft.description = agent.description
+          draft.mode = agent.mode
+          if (agent.color) draft.color = agent.color
+          if (agent.system) draft.system = agent.system
         })
       }
     })

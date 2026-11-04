@@ -10,7 +10,7 @@ Answer the user's question about pstack, hand them a prompt they can send, and l
 
 A message that asks for work, such as "use pstack to fix this bug", is not a help question. Read [`poteto-mode`](../poteto-mode/SKILL.md), do the work under it, and mention once that the `poteto-mode` agent keeps it on.
 
-This file maps questions to the skills and guide pages that hold the answers. Those files own the details. Read the file you route to before you quote it, and trust it when it disagrees with this map. The plugin turns the links here into absolute paths in its folder, which the installer links from the user's checkout of this repo, so give the user that absolute path.
+This file maps questions to the skills and guide pages that hold the answers. Those files own the details. Read the file you route to before you quote it, and trust it when it disagrees with this map. The plugin turns the links here into absolute paths in its folder, which is either the installed `pstack-opencode` package or the user's checkout of this repo that the installer linked, so give the user that absolute path.
 
 ## Find out what they need
 
@@ -35,7 +35,7 @@ When the models file is missing and it matters, ask whether the user wants to pi
 
 ## Get set up
 
-1. From a checkout of this repo, run `npm run install-pstack`. It links `src/` into `~/.config/opencode`, or into one project's `.opencode/` with `npm run install-pstack -- --project <dir>`, and copies nothing. Add the `experimental` settings it recommends: `"todo": true` gives agents `todowrite`, and `"subagent_depth": 2` lets a delegate run skills that spawn their own subagents.
+1. Add `"plugins": ["pstack-opencode"]` to `~/.config/opencode/opencode.jsonc`. The plugin registers every skill, its slash command, and the three agents. To run from a checkout of this repo instead, run `npm run install-pstack` there. It links `src/` into `~/.config/opencode`, or into one project's `.opencode/` with `npm run install-pstack -- --project <dir>`, and copies nothing. Either way, add two `experimental` settings, which the installer prints when they are missing: `"todo": true` gives agents `todowrite`, and `"subagent_depth": 2` lets a delegate run skills that spawn their own subagents.
 2. Run [`/setup-pstack`](../setup-pstack/SKILL.md). It asks for a reasoning budget, maps a model to each role, and writes `~/.config/opencode/pstack-models.md`. The plugin reads that file at the next request, so no restart is needed. Then it offers once each to generate a verification skill and a formal verification skill for the project, unless the project already has one.
 3. Start a real task with `/poteto-mode`, a goal, and a check that can pass or fail.
 
@@ -50,9 +50,11 @@ If cost is the worry, say where the tokens go and how to spend fewer. pstack spe
 Either way of starting it keeps the mode on:
 
 - `/poteto-mode` attaches the skill to its message and keeps a `pstack-mode` instruction entry on that session for the rest of the session, whatever agent it runs under.
-- The `poteto-mode` agent attaches the skill to the first message and keeps the same entry until the user switches agents. Press Tab to select it, or start with `opencode --agent poteto-mode`.
+- The `poteto-mode` agent attaches the skill to the first message and keeps the same entry until the user switches agents. Press Tab to select it, or start with `opencode --agent poteto-mode`. Both work with the package and with the installer, and neither needs a file in `agents/`.
 
 The entry keeps the mode in context every turn and through compaction.
+
+A user file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
 
 Mid-chat, "new task" makes the mode match a fresh playbook. `/poteto-mode` already uses `poteto-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with `agent: "poteto-agent"`.
 

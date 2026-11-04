@@ -129,6 +129,27 @@ export function readSkills(skillsDir) {
   return [...skills, ...readPlaybooks(join(skillsDir, MODE_AGENT)).filter((playbook) => !ids.has(playbook.id))]
 }
 
+const AGENT_MODES = ["primary", "subagent", "all"]
+
+export function readAgents(agentsDir) {
+  return readdirSync(agentsDir)
+    .filter((name) => name.endsWith(".md"))
+    .sort()
+    .map((name) => {
+      const path = join(agentsDir, name)
+      const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
+      if (!data.description) throw new Error(`pstack: ${path} has no description`)
+      if (!AGENT_MODES.includes(data.mode)) throw new Error(`pstack: ${path} has mode ${JSON.stringify(data.mode)}, expected one of ${AGENT_MODES.join(", ")}`)
+      return {
+        id: name.slice(0, -".md".length),
+        description: data.description,
+        mode: data.mode,
+        ...(data.color ? { color: data.color } : {}),
+        ...(body ? { system: body } : {}),
+      }
+    })
+}
+
 export function commandDescription(description, max = 120) {
   const sentence = description.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? description
   if (sentence.length <= max) return sentence
