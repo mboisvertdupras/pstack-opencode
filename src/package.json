@@ -1,6 +1,6 @@
 {
   "name": "pstack-opencode",
-  "version": "0.15.36-opencode",
+  "version": "0.15.37-opencode",
   "description": "pstack for OpenCode.",
   "type": "module",
   "license": "MIT",
