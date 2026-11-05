@@ -5,6 +5,7 @@ import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, op
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { readAgents } from "../../../../src/plugin/lib.js"
 
 const REPO = realpathSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".."))
 const SRC = join(REPO, "src")
@@ -244,7 +245,8 @@ const commands = {
       }
       const agents = api(state, ["GET", `/api/agent?${locationQuery(state)}`])
       const modes = Object.fromEntries(agents.map((agent) => [agent.id, agent.mode]))
-      check(modes["poteto-mode"] === "primary" && modes["poteto-agent"] === "subagent" && modes["comment-sicko"] === "subagent", `agents poteto-mode=${modes["poteto-mode"]} poteto-agent=${modes["poteto-agent"]} comment-sicko=${modes["comment-sicko"]}`)
+      const bundled = readAgents(join(SRC, "agents"))
+      check(bundled.every((agent) => modes[agent.id] === agent.mode), `agents ${bundled.map((agent) => `${agent.id}=${modes[agent.id]}`).join(" ")}`)
       const names = new Set(api(state, ["GET", `/api/command?${locationQuery(state)}`]).map((command) => command.name))
       const expected = srcSkills().filter((name) => !name.startsWith("principle-"))
       const missing = expected.filter((name) => !names.has(name))
