@@ -94,7 +94,7 @@ test/                    Plugin, installer, and lint tests. skills.test.mjs lint
 Run the release script from an up-to-date `main` with a clean working tree.
 
 ```sh
-npm run release -- 0.15.39-opencode
+npm run release -- 0.15.44
 ```
 
 The script runs the tests and lint, sets the version in `src/package.json`, commits `Release <version>`, tags `v<version>`, and pushes `main` and the tag. The tag starts `.github/workflows/release.yml`. That workflow checks that the tag matches `src/package.json`, runs the tests and lint again, and publishes `src/` to npm with trusted publishing. GitHub's OIDC identity authenticates the publish, so no npm token or browser login is needed. The workflow turns provenance off, because npm/cli#10078 makes a slow Sigstore response fail the whole publish. Remove `NPM_CONFIG_PROVENANCE` from the publish step once that issue is fixed.

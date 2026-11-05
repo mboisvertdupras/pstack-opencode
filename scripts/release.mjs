@@ -16,7 +16,7 @@ const fail = (message) => {
 }
 
 const version = process.argv[2]
-if (!version || !SEMVER.test(version)) fail(`usage: npm run release -- <version>, such as 0.15.39-opencode (got ${JSON.stringify(version ?? "")})`)
+if (!version || !SEMVER.test(version)) fail(`usage: npm run release -- <version>, such as 0.15.44 (got ${JSON.stringify(version ?? "")})`)
 
 const manifest = JSON.parse(readFileSync(MANIFEST, "utf8"))
 if (manifest.version === version) fail(`src/package.json is already at ${version}`)
