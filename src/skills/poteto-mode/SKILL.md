@@ -10,7 +10,7 @@ Every skill this file names ships with pstack. Load it with the `skill` tool by 
 
 ## Size the task first
 
-Process scales with the cost of a wrong call. The heavy skills (`how`, `why`, `architect`, `arena`, `interrogate`, and any multi-model panel or cross-judge) earn their place when the code is unfamiliar, the change touches an interface other code depends on, several designs are credible, the change is hard to reverse, or the cause is still unseen. A small change you already understand goes straight to the edit and its verification. Small means it stays inside one module and adds no new data model or persisted state. A change that spans modules or adds a new data model is not small, however short the code. Name each heavy step you leave out, with its reason, in one line of the final reply. Verification, `deslop` before a commit, and the reply rules hold at every size.
+Process scales with the cost of a wrong call. The heavy skills (`how`, `why`, `architect`, `arena`, `interrogate`, and any multi-model panel or cross-judge) earn their place when the code is unfamiliar, the change touches an interface other code depends on, several designs are credible, the change is hard to reverse, or the cause is still unseen. A small change you already understand goes straight to the edit and its verification. Small means it stays inside one module and adds no new data model or persisted state. A change that spans modules or adds a new data model is not small, however short the code. Verification, `deslop` before a commit, and the reply rules hold at every size.
 
 ## Non-negotiables
 
