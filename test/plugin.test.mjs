@@ -328,20 +328,7 @@ test("the gate matches git commit behind global flags and nothing that only ment
 
 const edit = (sessionID, agent = "build") => ({ tool: "edit", sessionID, agent, input: { path: "src/money.js" } })
 const delegate = (sessionID, subagent, agent = "build") => ({ tool: "subagent", sessionID, agent, input: { agent: subagent, prompt: "fix it" } })
-
-const readOf = (sessionID, path, tool = "read", agent = "build") => ({ tool, sessionID, agent, input: path === undefined ? {} : { path } })
-
-async function projectSession() {
-  const sessions = { s1: { agent: "build", location: { directory: "/repo" } }, s2: { agent: "build", location: { directory: "/repo" } }, s3: { agent: "explore", location: { directory: "/repo" } } }
-  const { ctx, state } = fakeContext({ sessions })
-  await plugin.setup(ctx)
-  await potetoMode(state, "s1")
-  return state
-}
-
-const PLAYBOOK_FIRST =
-  "pstack: poteto mode runs every task through a playbook. Load the matching playbook with the `skill` tool (Bug fix is `bug-fix`) and follow its steps. For a fully specified one-line edit, add a todo `no playbook: <reason>` instead. Then retry this call."
-const PLAYBOOK_FIRST_COMMIT = PLAYBOOK_FIRST.replace(/\.$/, " as its own `git commit` command, because this whole shell command was rejected.")
+const COMMIT = "git commit -m a"
 
 async function potetoSession(storage) {
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage })
@@ -350,111 +337,53 @@ async function potetoSession(storage) {
   return state
 }
 
-test("reading a playbook file records it as the session's playbook, and a failed load records nothing", async () => {
-  const state = await potetoSession()
-  const read = (path, status = "completed") => ({ tool: "read", sessionID: "s1", agent: "build", input: { path }, status })
-  await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md", "error"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
-
-  await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md"))
-  await state.hooks["execute.before"](edit("s1"))
-})
-
-test("with a playbook loaded and no other skill, edits, delegations and project reads all pass", async () => {
-  const state = await projectSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-  await state.hooks["execute.before"](edit("s1"))
-  await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
-  for (const tool of ["read", "grep", "glob"]) await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js", tool))
-})
-
-const todos = (sessionID, ...contents) => ({ tool: "todowrite", sessionID, agent: "build", input: { todos: contents.map((content) => ({ content, status: "pending" })) }, status: "completed" })
-const COMMIT = "git commit -m a"
-
-test("a /poteto-mode session holds code actions until a playbook loads or a todo says no playbook", async () => {
-  const state = await potetoSession()
-  for (const action of [edit("s1"), delegate("s1", "poteto-agent"), delegate("s1", "general")]) {
-    await assert.rejects(async () => state.hooks["execute.before"](action), { message: PLAYBOOK_FIRST })
+test("poteto mode never holds an edit or a delegation with no playbook loaded, and holds a commit until deslop loads", async () => {
+  const commanded = await potetoSession()
+  const { ctx, state: agent } = fakeContext({ sessions: { s1: { agent: "poteto-mode" } } })
+  await plugin.setup(ctx)
+  for (const [state, name] of [
+    [commanded, "build"],
+    [agent, "poteto-mode"],
+  ]) {
+    for (const action of [edit("s1", name), delegate("s1", "poteto-agent", name), delegate("s1", "general", name)]) await state.hooks["execute.before"](action)
+    await assert.rejects(async () => state.hooks["execute.before"](shell("s1", name, COMMIT)), /load the `deslop` skill/)
+    await state.hooks["execute.after"](loaded("s1", name, "deslop"))
+    await state.hooks["execute.before"](shell("s1", name, COMMIT))
   }
-  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), { message: `${PLAYBOOK_FIRST_COMMIT}` })
+})
 
-  await state.hooks["execute.after"](todos("s1", "Fix the bug"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
-  await state.hooks["execute.after"]({ ...todos("s1", "  No Playbook: one-line typo"), status: "error" })
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
-
-  await state.hooks["execute.after"](todos("s1", "Look around", "  No Playbook: one-line typo"))
-  await state.hooks["execute.before"](edit("s1"))
-  await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
+test("reading the deslop skill file lifts the commit hold, and a failed read does not", async () => {
+  const state = await potetoSession()
+  const read = (status) => ({ tool: "read", sessionID: "s1", agent: "build", input: { path: "/home/me/pstack/src/skills/deslop/SKILL.md" }, status })
+  await state.hooks["execute.after"](read("error"))
   await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), /load the `deslop` skill/)
-  await state.hooks["execute.after"](loaded("s1", "build", "deslop"))
+  await state.hooks["execute.after"](read("completed"))
   await state.hooks["execute.before"](shell("s1", "build", COMMIT))
 })
 
-test("the playbook-first rule never holds reads, shell, explore, skill, or a plain build or delegate session", async () => {
+test("a loaded playbook does not lift the commit hold", async () => {
   const state = await potetoSession()
-  await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js"))
-  await state.hooks["execute.before"](readOf("s1", undefined, "grep"))
-  await state.hooks["execute.before"](shell("s1", "build", "printf x > src/money.js"))
-  await state.hooks["execute.before"](delegate("s1", "explore"))
-  for (const tool of ["skill", "todowrite"]) await state.hooks["execute.before"]({ tool, sessionID: "s1", agent: "build", input: {} })
-
-  const { ctx, state: plain } = fakeContext({ sessions: { s2: { agent: "build" }, s3: { agent: "poteto-agent" } } })
-  await plugin.setup(ctx)
-  await plain.hooks["execute.before"](edit("s2"))
-  await plain.hooks["execute.before"](edit("s3", "poteto-agent"))
-  await plain.hooks["execute.before"](delegate("s3", "poteto-agent", "poteto-agent"))
-})
-
-test("the poteto-mode agent holds code actions without a playbook", async () => {
-  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "poteto-mode" } } })
-  await plugin.setup(ctx)
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1", "poteto-mode")), { message: PLAYBOOK_FIRST })
-  await state.hooks["execute.after"](todos("s1", "no playbook: typo"))
-  await state.hooks["execute.before"](edit("s1", "poteto-mode"))
-})
-
-test("the no-playbook skip survives a plugin restart on the same storage", async () => {
-  const first = await potetoSession()
-  await first.hooks["execute.after"](todos("s1", "no playbook: typo"))
-
-  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
-  await plugin.setup(ctx)
-  await state.hooks["execute.before"](edit("s1"))
-})
-
-test("the poteto-mode agent is gated, and plain build sessions and delegates are not", async () => {
-  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "poteto-mode" }, s2: { agent: "build" }, s3: { agent: "poteto-agent" } } })
-  await plugin.setup(ctx)
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1", "poteto-mode")), { message: PLAYBOOK_FIRST })
-  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "bug-fix"))
-  await state.hooks["execute.before"](edit("s1", "poteto-mode"))
-
-  await state.hooks["execute.before"](edit("s2"))
-  await state.hooks["execute.before"](delegate("s2", "general"))
-  await state.hooks["execute.before"](edit("s3", "poteto-agent"))
-})
-
-test("the playbook survives a plugin restart on the same storage, and the deslop load still gates commits", async () => {
-  const first = await potetoSession()
-  await first.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-
-  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
-  await plugin.setup(ctx)
-  await state.hooks["execute.before"](edit("s1"))
+  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
   await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), /load the `deslop` skill/)
-  await state.hooks["execute.after"](loaded("s1", "build", "deslop"))
+})
+
+test("the deslop load survives a plugin restart on the same storage", async () => {
+  const first = await potetoSession()
+  await assert.rejects(async () => first.hooks["execute.before"](shell("s1", "build", COMMIT)), /load the `deslop` skill/)
+  await first.hooks["execute.after"](loaded("s1", "build", "deslop"))
+
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
+  await plugin.setup(ctx)
   await state.hooks["execute.before"](shell("s1", "build", COMMIT))
 })
 
 test("loads that finish together all land in storage", async () => {
   const state = await potetoSession()
   await Promise.all(["bug-fix", "deslop"].map((id) => state.hooks["execute.after"](loaded("s1", "build", id))))
-  await state.hooks["execute.before"](edit("s1"))
   await state.hooks["execute.before"](shell("s1", "build", COMMIT))
 })
 
-test("a storage error during the gate lookup lets a code action through", async () => {
+test("a storage error during the gate lookup lets a commit through", async () => {
   const state = await potetoSession()
   state.storage = new Proxy(state.storage, {
     get() {
@@ -465,7 +394,7 @@ test("a storage error during the gate lookup lets a code action through", async 
   const original = console.error
   console.error = (...args) => errors.push(args)
   try {
-    await state.hooks["execute.before"](edit("s1"))
+    await state.hooks["execute.before"](shell("s1", "build", COMMIT))
   } finally {
     console.error = original
   }

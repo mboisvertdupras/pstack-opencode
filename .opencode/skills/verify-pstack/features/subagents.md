@@ -27,5 +27,4 @@ Preconditions:
 ## Gotchas
 
 - `general` has no subagent tool, so it lists the files itself and never spawns. Use `poteto-agent` as the outer level in the depth check. If the depth check fails on a permission denial, that is OpenCode's agent rule, not `subagent_depth`. Record which one blocked it.
-- These recipes run under `build`, so no gate applies. Under poteto mode, a `poteto-agent` or `general` spawn is a code action, and the playbook-first gate holds it until a playbook loads.
 - Restore `math.js` with `git -C "$PSTACK_VERIFY_PROJECT" checkout math.js` after the comment-sicko check.
