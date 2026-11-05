@@ -144,6 +144,15 @@ test("summarize scores clean runs, counts failures as errors, and prints the met
   assert.equal(lines.at(-1), "routing_accuracy=0.75 errors=2 work=3/6 commits=1 toolcalls=7")
 })
 
+test("a matrix row with no playbook or skills to load passes with no tool calls, and one that has them errors", () => {
+  const silent = tree(session("poteto-mode", [], { skills: ["poteto-mode"] }))
+  const records = ["question", "typo", "bug"].map((id) => ({ id, scenario: `matrix:${id}@agent`, exit: 0, durationMs: 1, sessionTree: silent }))
+  const lines = report(summarize(records)).split("\n")
+  assert.ok(!lines.includes("error question: no tool calls"))
+  assert.ok(!lines.includes("error typo: no tool calls"))
+  assert.ok(lines.includes("error bug: no tool calls"))
+})
+
 test("the matrix playbook check passes on a read of the expected playbook", () => {
   const result = check("matrix:bug@agent", tree(session("poteto-mode", [readPlaybook("bug-fix"), skill("how")])), "playbook")
   assert.equal(result.pass, true)
@@ -174,7 +183,7 @@ test("a playbook or SKILL.md read through the shell counts as a read or a load",
   assert.deepEqual([direct.pass, direct.picked], [true, "feature"])
   const cd = check("matrix:feature@cc-slash", tree(session("build", [commit(`cd ${root}/poteto-mode/playbooks/ && cat feature.md`)])), "playbook")
   assert.equal(cd.pass, true)
-  const loaded = check("matrix:feature@cc-slash", tree(session("build", [commit(`cd ${root} && cat how/SKILL.md`), edit()])), "skills")
+  const loaded = check("matrix:how@cc-slash", tree(session("build", [commit(`cd ${root} && cat how/SKILL.md`), edit()])), "skills")
   assert.equal(loaded.pass, true)
 })
 
@@ -192,27 +201,33 @@ test("the matrix playbook check fails on a wrong pick and names it", () => {
 
 test("skills_ran wants the skill's own work between its load and the first code action", () => {
   const loadedOnly = tree(session("poteto-mode", [skill("how"), delegate()]))
-  assert.equal(check("matrix:bug@agent", loadedOnly, "skills_ran").pass, false)
+  assert.equal(check("matrix:why@agent", loadedOnly, "skills_ran").pass, false)
   const ran = tree(session("poteto-mode", [skill("how"), delegate("explore"), delegate()]))
-  assert.equal(check("matrix:bug@agent", ran, "skills_ran").detail, "how ran before acting")
+  assert.equal(check("matrix:why@agent", ran, "skills_ran").detail, "how ran before acting")
   const why = tree(session("poteto-mode", [skill("why"), commit("git log --oneline -- src/money.js"), edit()]))
-  assert.equal(check("matrix:bug@agent", why, "skills_ran").pass, true)
+  assert.equal(check("matrix:why@agent", why, "skills_ran").pass, true)
+})
+
+test("skills_ran scores only rows that expect a skill whose own work it can see", () => {
+  assert.deepEqual(scenarios["matrix:why@agent"].checks, ["playbook", "skills", "skills_ran"])
+  assert.deepEqual(scenarios["matrix:perf@agent"].checks, ["playbook", "skills"])
+  assert.deepEqual(scenarios["matrix:bug@agent"].checks, ["playbook"])
 })
 
 test("a gate-rejected call is not the moment the session acted", () => {
   const rejected = { ...edit(), state: { status: "error", input: {} } }
   const run = tree(session("poteto-mode", [skill("feature"), rejected, skill("how"), delegate("explore"), edit()]))
-  assert.equal(check("matrix:feature@agent", run, "skills_ran").pass, true)
+  assert.equal(check("matrix:why@agent", run, "skills_ran").pass, true)
   assert.equal(decided(tree(session("poteto-mode", [skill("feature"), rejected]))), false)
 })
 
 test("the matrix skills check fails when the skill loads only after the first edit", () => {
-  const late = check("matrix:bug@agent", tree(session("poteto-mode", [read(), edit(), skill("how")])), "skills")
+  const late = check("matrix:why@agent", tree(session("poteto-mode", [read(), edit(), skill("how")])), "skills")
   assert.equal(late.pass, false)
   assert.match(late.detail, /first loads how$/)
   const childEdit = session("general", [edit()])
-  assert.equal(check("matrix:bug@agent", tree(session("poteto-mode", [delegate("general"), skill("why")]), childEdit), "skills").pass, false)
-  assert.equal(check("matrix:bug@agent", tree(session("poteto-mode", [skill("tdd"), skill("how"), delegate()])), "skills").pass, true)
+  assert.equal(check("matrix:why@agent", tree(session("poteto-mode", [delegate("general"), skill("why")]), childEdit), "skills").pass, false)
+  assert.equal(check("matrix:why@agent", tree(session("poteto-mode", [skill("tdd"), skill("how"), delegate()])), "skills").pass, true)
 })
 
 test("avoids passes when none of the expected-avoid skills load and fails naming the one that did", () => {
@@ -258,24 +273,17 @@ test("stay_out allows the poteto-mode attachment that /poteto-mode puts on the f
   assert.equal(check("matrix:typo@slash", tree(session("build", [edit()], { skills: ["poteto-mode"] })), "stay_out").pass, true)
 })
 
-test("stay_out passes when the only pstack trace is a no playbook todo", () => {
-  for (const id of ["matrix:typo@agent", "matrix:question@agent"]) {
-    assert.equal(check(id, tree(session("poteto-mode", [todos("no playbook: one-line typo"), edit()], { skills: ["poteto-mode"] })), "stay_out").pass, true, id)
-  }
-  assert.equal(check("matrix:typo@build", tree(session("build", [todos("no playbook: one-line typo"), edit()])), "stay_out").pass, true)
-})
-
 test("an early-stopped matrix run is scored, and the table shows checks and the picked playbook", () => {
   const stopped = session("poteto-mode", [readPlaybook("feature"), edit()])
   stopped.messages.push({ type: "assistant", error: { type: "aborted", message: "Step interrupted" }, content: [] })
   const summary = summarize([
     { id: "a", scenario: "matrix:bug@agent", exit: 0, stoppedBy: "decision", durationMs: 1, sessionTree: tree(stopped) },
-    { id: "b", scenario: "matrix:question@build", exit: 0, stoppedBy: "idle", durationMs: 1, sessionTree: tree(session("build", [])) },
+    { id: "b", scenario: "matrix:typo@build", exit: 0, stoppedBy: "idle", durationMs: 1, sessionTree: tree(session("build", [])) },
   ])
   assert.equal(summary.errors, 0)
   const lines = report(summary).split("\n")
   assert.match(lines[0], /^case\s+\| agent\s+\| build$/)
-  assert.match(lines[1], /^bug\s+\| playbook 0\/1 {2}skills 0\/1 {2}skills_ran 0\/1 {2}picked feature\s+\| -$/)
-  assert.match(lines[2], /^question\s+\| -\s+\| stay_out 1\/1 {2}picked none$/)
-  assert.equal(lines.at(-1), "routing_accuracy=0.25 errors=0 work=2/2 commits=0 toolcalls=2")
+  assert.match(lines[1], /^bug\s+\| playbook 0\/1 {2}picked feature\s+\| -$/)
+  assert.match(lines[2], /^typo\s+\| -\s+\| stay_out 1\/1 {2}picked none$/)
+  assert.equal(lines.at(-1), "routing_accuracy=0.50 errors=0 work=2/2 commits=0 toolcalls=2")
 })

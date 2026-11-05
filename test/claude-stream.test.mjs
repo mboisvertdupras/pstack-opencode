@@ -35,8 +35,9 @@ test("the adapter strips the pstack skill prefix and counts a playbook read unde
   const tree = sessionTree(bugStream, context)
   const checks = score("matrix:bug@cc-slash", tree).checks
   assert.deepEqual([checks.playbook.pass, checks.playbook.picked], [true, "bug-fix"])
-  assert.equal(checks.skills.pass, true)
-  assert.match(checks.skills.detail, /^how loaded before/)
+  const { skills } = score("matrix:why@cc-slash", tree).checks
+  assert.equal(skills.pass, true)
+  assert.match(skills.detail, /^how loaded before/)
 })
 
 test("a run of TaskCreate calls is one todo list that carries the playbook's step 1", () => {

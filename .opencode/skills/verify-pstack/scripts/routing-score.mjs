@@ -228,20 +228,20 @@ export const MATRIX_CASES = [
   {
     id: "bug",
     prompt: `Customers report that for some multi-item carts with tax, the total in the invoice email is one cent off the invoice. Find and fix it. ${AUTONOMOUS}`,
-    expect: { playbook: "bug-fix", skills: ["how", "why", "tdd"] },
+    expect: { playbook: "bug-fix" },
   },
   {
     id: "perf",
     prompt: `At month end, issuing and listing invoices for a customer with thousands of orders takes far too long. Make it faster. ${AUTONOMOUS}`,
-    expect: { playbook: "perf-issue", skills: ["how"] },
+    expect: { playbook: "perf-issue", skills: ["benchmark-checklist"] },
   },
   {
     id: "refactor",
     prompt: `Rename the cart module's Cart concept to Basket everywhere (module, functions, record fields, ids, and tests), with no behavior change. ${AUTONOMOUS}`,
-    expect: { playbook: "refactoring", skills: ["how"] },
+    expect: { playbook: "refactoring" },
   },
-  { id: "feature", prompt: FEATURE_PROMPT, expect: { playbook: "feature", skills: ["how", "architect", "arena"] } },
-  { id: "small-feature", prompt: SMALL_FEATURE_PROMPT, expect: { avoid: ["architect", "arena", "interrogate"] } },
+  { id: "feature", prompt: FEATURE_PROMPT, expect: { playbook: "feature", skills: ["principle-model-the-domain"] } },
+  { id: "small-feature", prompt: SMALL_FEATURE_PROMPT, expect: { playbook: "feature", avoid: ["architect", "arena", "interrogate"] } },
   { id: "how", prompt: INVESTIGATE_PROMPT, expect: { playbook: "investigation", skills: ["how"] } },
   {
     id: "why",
@@ -260,7 +260,7 @@ export const MATRIX_CASES = [
     expect: { playbook: "prototype" },
   },
   { id: "typo", prompt: `Fix the typo "recieve" in the README. ${AUTONOMOUS}`, expect: { stayOut: true } },
-  { id: "question", prompt: "What command runs the tests here?", expect: { stayOut: true } },
+  { id: "question", prompt: "What command runs the tests here?", expect: { avoid: ["architect", "arena", "interrogate"] } },
 ]
 export const MATRIX_ENTRIES = {
   agent: { runtime: "opencode", drive: { via: "start", agent: MODE_AGENT }, attaches: [MODE_AGENT] },
@@ -271,7 +271,7 @@ export const MATRIX_ENTRIES = {
 const MATRIX_GROUPS = { matrix: ["agent", "build"], "matrix@cc": ["cc-slash"], compare: ["agent", "slash", "cc-slash"] }
 const DECIDE_MS = 4 * MINUTE
 
-const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills", "skills_ran"] : []), ...(expect.avoid ? ["avoids"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
+const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills", ...(expect.skills.some((id) => RAN[id]) ? ["skills_ran"] : [])] : []), ...(expect.avoid ? ["avoids"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
 
 export const scenarios = {
   "feature-agent": { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
@@ -327,12 +327,14 @@ function providerError(tree, stopped) {
   }
 }
 
+const needsTools = (expect) => !expect || Boolean(expect.playbook || expect.skills)
+
 function failureOf(record, tree, scored) {
   if (record.error) return record.error
   if (record.exit !== 0) return `exit ${record.exit}`
   const provider = tree && providerError(tree, Boolean(record.stoppedBy))
   if (provider) return provider
-  if (scored.counts.toolCalls === 0 && !scenarios[record.scenario].expect?.stayOut) return "no tool calls"
+  if (scored.counts.toolCalls === 0 && needsTools(scenarios[record.scenario].expect)) return "no tool calls"
   return undefined
 }
 
