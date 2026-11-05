@@ -1,3 +1,7 @@
+---
+requires: principle-sequence-verifiable-units
+---
+
 ### Autonomous run
 
 **You own the exit condition. Define done, then drive to it without stopping.**

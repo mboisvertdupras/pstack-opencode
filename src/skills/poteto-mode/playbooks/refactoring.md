@@ -1,3 +1,7 @@
+---
+requires: principle-model-the-domain, principle-foundational-thinking, principle-redesign-from-first-principles, principle-subtract-before-you-add, principle-laziness-protocol
+---
+
 ### Refactoring
 
 **You own the contract. The structure changes. The behavior does not.** Distinct from Feature, which adds behavior, and Bug fix, which corrects it.

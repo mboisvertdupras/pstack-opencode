@@ -1,3 +1,7 @@
+---
+requires: principle-model-the-domain
+---
+
 ### Feature
 
 **You own the design. Plan, review, verify.** Delegate implementation. Stay in the lead.
