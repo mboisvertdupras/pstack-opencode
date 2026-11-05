@@ -76,6 +76,19 @@ test("a poteto-mode playbook stem is a skill ID too", () => {
   assert.deepEqual(found("Load the `bug-fix` skill, not the `bug-fixes` skill.", SKILL, exists), ["skill-id the `bug-fixes` skill"])
 })
 
+test("a playbook requires only loadable skills that its own body names", () => {
+  const PLAYBOOK = "src/skills/poteto-mode/playbooks/perf-issue.md"
+  const exists = (path) => /src\/skills\/(how|benchmark-checklist|principle-model-the-domain)\/SKILL\.md$/.test(path)
+  const body = "### Perf issue\n\n1. Vet it with the `benchmark-checklist` skill.\n2. Load the `how` skill with the `skill` tool.\n3. Name the shape per **principle-model-the-domain**.\n"
+  assert.deepEqual(found(`---\nrequires: benchmark-checklist, how, principle-model-the-domain\n---\n\n${body}`, PLAYBOOK, exists), [])
+  assert.deepEqual(found(`---\nrequires: how, gone, tdd\n---\n\n${body}`, PLAYBOOK, exists), [
+    "frontmatter requires gone, which is not a skill",
+    "frontmatter requires tdd, which is not a skill",
+  ])
+  const tddExists = (path) => exists(path) || path.endsWith("src/skills/tdd/SKILL.md")
+  assert.deepEqual(found(`---\nrequires: tdd\n---\n\n${body}`, PLAYBOOK, tddExists), ["frontmatter requires tdd, which the playbook never names"])
+})
+
 test("a SKILL.md names its folder and has a description", () => {
   assert.deepEqual(
     lint([{ file: SKILL, text: "---\nname: what\n---\n\n# How\n" }]).map(({ line, rule, text }) => `${line} ${rule} ${text}`),

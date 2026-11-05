@@ -254,6 +254,56 @@ test("a poteto-agent commit is blocked until deslop loads, then every commit pas
   await assert.rejects(async () => state.hooks["execute.before"](shell("s2", "poteto-mode", "git commit -m b")))
 })
 
+const spawn = (sessionID, agent, input) => ({ tool: "subagent", sessionID, agent, input: { description: "d", prompt: "p", ...input } })
+
+test("after Perf issue loads, a poteto-agent delegation waits for the skills its steps always run", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "perf-issue"))
+  const fix = spawn("s1", "poteto-mode", { agent: "poteto-agent" })
+  await assert.rejects(async () => state.hooks["execute.before"](fix), /Perf issue.*`benchmark-checklist`, `how`, and `principle-sequence-verifiable-units`/s)
+  await state.hooks["execute.before"](spawn("s1", "poteto-mode", { agent: "explore" }))
+
+  for (const id of ["benchmark-checklist", "how"]) await state.hooks["execute.after"](loaded("s1", "poteto-mode", id))
+  await assert.rejects(async () => state.hooks["execute.before"](fix), /`principle-sequence-verifiable-units`/)
+  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "principle-sequence-verifiable-units"))
+  await state.hooks["execute.before"](fix)
+})
+
+test("a commit waits for the loaded playbook's skills as well as deslop", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  for (const id of ["feature", "deslop"]) await state.hooks["execute.after"](loaded("s1", "poteto-mode", id))
+  const commit = shell("s1", "poteto-mode", "git commit -m a")
+  await assert.rejects(async () => state.hooks["execute.before"](commit), /Feature.*`principle-model-the-domain`.*rerun `git commit` as its own command/s)
+  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "principle-model-the-domain"))
+  await state.hooks["execute.before"](commit)
+})
+
+test("with no playbook, or one whose steps make every skill conditional, nothing waits on a playbook", async () => {
+  const { ctx, state } = fakeContext()
+  await plugin.setup(ctx)
+  await state.hooks["execute.before"](spawn("s1", "poteto-mode", { agent: "poteto-agent" }))
+  await state.hooks["execute.after"](loaded("s2", "poteto-mode", "bug-fix"))
+  await state.hooks["execute.before"](spawn("s2", "poteto-mode", { agent: "poteto-agent" }))
+})
+
+test("a pstack delegate's subagent calls run in the foreground, so its report waits for its children", async () => {
+  const sessions = { root: { agent: "poteto-mode" }, child: { agent: "poteto-agent", parentID: "root" }, other: { agent: "general", parentID: "root" } }
+  const { ctx, state } = fakeContext({ sessions })
+  await plugin.setup(ctx)
+  const fromChild = spawn("child", "poteto-agent", { agent: "comment-sicko", background: true, model: "m" })
+  await state.hooks["execute.before"](fromChild)
+  assert.deepEqual(fromChild.input, { description: "d", prompt: "p", agent: "comment-sicko", background: false, model: "m" })
+
+  const fromRoot = spawn("root", "poteto-mode", { agent: "poteto-agent", background: true })
+  await state.hooks["execute.before"](fromRoot)
+  assert.equal(fromRoot.input.background, true)
+  const fromOther = spawn("other", "general", { agent: "explore", background: true })
+  await state.hooks["execute.before"](fromOther)
+  assert.equal(fromOther.input.background, true)
+})
+
 test("a build session commits freely", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
