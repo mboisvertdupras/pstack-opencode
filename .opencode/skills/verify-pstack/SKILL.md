@@ -115,6 +115,7 @@ Proof standards for this plugin:
 - Prove the mechanism and the outcome. A reply that quotes the playbook is the outcome. The `skills=["poteto-mode"]` on the first user message and the `pstack-mode` entry are the mechanism. Show both.
 - Check what a feature must not do as well. The skill attaches to the first message only, and other agents get no mode entry.
 - A model can answer right by reading files. When a claim rests on the plugin, find it in `export` or `entries`, not only in the reply.
+- A delegate told to follow a rubric skill can skip it and still return a plausible verdict. The agent prompt loads the rubric before it reads any input, and `$H tree` must show `skill` with the rubric's ID as each child's first tool call. Seed a defect that only the rubric's own rules catch, so a skipped rubric also shows in the verdict.
 
 ## Cleanup
 
@@ -135,5 +136,5 @@ To stop a run whose state is lost, find its `pid` in `$TMPDIR/opencode/pstack-ve
 - Sessions are written to the user's real OpenCode database. The server isolates config but not data, because isolating data drops the user's model credentials. `down` deletes this run's sessions. A session the harness filed elsewhere would survive it.
 - `opencode run` files its session under `$PWD`, not the process directory. The harness sets `PWD` to the test project. Never run `opencode run --server` by hand from the repo, or the session and every file it touches land in this repo.
 - User skills in `~/.claude/skills` and `~/.agents/skills` still load in the test server. One with a pstack ID replaces pstack's. `doctor` then reports fewer than the full count, and `up` times out. Check with `$H skill <id>`.
-- OpenCode caches the plugin module and its skills per server. After a change to `src/`, run `$H down` and `$H up`. A running server keeps the old plugin.
+- OpenCode caches the plugin module and its skills per server. After a change to `src/`, run `$H down` and `$H up`. A running server keeps the old plugin. `down` also deletes the seeded project, with every branch and file you planted in it. Script the fixture setup once and rerun it after each `up`.
 - `opencode api` output is cut at 64 KiB when piped. The harness writes it to a file first. Do the same in any one-off call.
