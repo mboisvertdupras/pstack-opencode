@@ -7,6 +7,7 @@ import plugin from "../src/plugin/index.js"
 import { parseFrontmatter } from "../src/plugin/lib.js"
 
 const SRC = join(import.meta.dirname, "..", "src")
+const BUNDLED_AGENTS = readdirSync(join(SRC, "agents")).filter((name) => name.endsWith(".md")).length
 
 // A fake OpenCode plugin context that records what the plugin registers and what it sends.
 function fakeContext({ modelsFile, sessions = {}, registered = [], storage = {}, agents = {} } = {}) {
@@ -69,10 +70,10 @@ const coreAgent = (id) => ({ id, name: id, mode: "primary", hidden: false, permi
 
 const bundledBody = (name) => parseFrontmatter(readFileSync(join(SRC, "agents", `${name}.md`), "utf8")).body
 
-test("registers poteto-mode as a primary agent and poteto-agent and comment-sicko as subagents, with their shipped prompts", async () => {
+test("registers poteto-mode as a primary agent and poteto-agent, comment-sicko, and the thermo reviewers as subagents, with their shipped prompts", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
-  assert.deepEqual([...state.agents.keys()].sort(), ["comment-sicko", "poteto-agent", "poteto-mode"])
+  assert.deepEqual([...state.agents.keys()].sort(), ["comment-sicko", "poteto-agent", "poteto-mode", "thermo-nuclear-code-quality-review-subagent", "thermo-nuclear-review-subagent"])
   const mode = state.agents.get("poteto-mode")
   assert.equal(mode.mode, "primary")
   assert.equal(mode.color, "#e5c07b")
@@ -87,6 +88,10 @@ test("registers poteto-mode as a primary agent and poteto-agent and comment-sick
   assert.equal(sicko.mode, "subagent")
   assert.equal(sicko.color, undefined)
   assert.equal(sicko.system, bundledBody("comment-sicko"))
+  for (const id of ["thermo-nuclear-review-subagent", "thermo-nuclear-code-quality-review-subagent"]) {
+    assert.equal(state.agents.get(id).mode, "subagent")
+    assert.equal(state.agents.get(id).system, bundledBody(id))
+  }
   for (const id of state.agents.keys()) {
     assert.equal(state.agents.get(id).name, id)
     assert.equal(state.agents.get(id).hidden, false)
@@ -101,7 +106,7 @@ test("an agent already registered under a pstack ID is left as it was", async ()
   await plugin.setup(ctx)
   assert.deepEqual(state.agents.get("poteto-agent"), mine)
   assert.deepEqual(state.agents.get("build"), coreAgent("build"))
-  assert.equal(state.agents.size, 4)
+  assert.equal(state.agents.size, BUNDLED_AGENTS + 1)
 })
 
 test("setting up twice on the same agents changes nothing the second time", async () => {
@@ -109,7 +114,7 @@ test("setting up twice on the same agents changes nothing the second time", asyn
   await plugin.setup(ctx)
   const first = structuredClone([...state.agents])
   await plugin.setup(ctx)
-  assert.equal(state.agents.size, 3)
+  assert.equal(state.agents.size, BUNDLED_AGENTS)
   assert.deepEqual([...state.agents], first)
 })
 
@@ -124,7 +129,7 @@ test("a user agent file loaded after the plugin wins on the fields it sets and k
   assert.equal(mode.description, "my mode")
   assert.equal(mode.color, "#000000")
   assert.equal(mode.mode, "primary")
-  assert.equal(state.agents.size, 3)
+  assert.equal(state.agents.size, BUNDLED_AGENTS)
 })
 
 test("registers every bundled skill and every poteto-mode playbook, hidden unless its frontmatter lets the model invoke it", async () => {

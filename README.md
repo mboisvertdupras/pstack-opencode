@@ -1,6 +1,6 @@
 # pstack for OpenCode
 
-pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `how` to explain code, `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 60 skills in `src/skills` include the `principle-*` skills that the playbooks cite. The three agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, and the `comment-sicko` comment reviewer.
+pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `how` to explain code, `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 63 skills in `src/skills` include the `principle-*` skills that the playbooks cite, and `/thermos`, which runs two harsh branch reviews in parallel. The five agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, the `comment-sicko` comment reviewer, and the two thermo-nuclear reviewers that `/thermos` spawns.
 
 pstack was ported from poteto's [pstack in cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack), which is MIT licensed, and that license still ships.
 
@@ -14,7 +14,7 @@ Add the package to `plugins` in `~/.config/opencode/opencode.jsonc`.
 }
 ```
 
-The plugin registers the skills, their slash commands, and the three agents. A file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
+The plugin registers the skills, their slash commands, and the five agents. A file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
 
 To run pstack from a checkout of this repo instead, use the installer. It links `src/` and copies nothing.
 
@@ -62,8 +62,8 @@ A user skill with the same ID as a pstack skill keeps that ID in OpenCode. pstac
 src/                     The plugin, published as the pstack-opencode package. The installer links this folder.
 src/plugin/              Registers the skills, commands, and agents. lib.js is pure, index.js talks to OpenCode.
 src/skills/              One folder per skill, each with a SKILL.md
-src/agents/              poteto-mode, poteto-agent, and comment-sicko
-src/LICENSE*             The pstack and cursor-team-kit MIT notices
+src/agents/              poteto-mode, poteto-agent, comment-sicko, and the two thermo-nuclear reviewers
+src/LICENSE*             The pstack, cursor-team-kit, and Thermos MIT notices
 scripts/install.mjs      Links src/ into OpenCode, removes old agent links, and uninstalls
 scripts/lint-skills.mjs  Checks skills and agents for product names, Cursor-only tool names, broken links, and bad frontmatter
 test/                    Plugin, installer, and lint tests. skills.test.mjs lints everything in src/.
@@ -91,4 +91,4 @@ test/                    Plugin, installer, and lint tests. skills.test.mjs lint
 
 ## License
 
-MIT. See `LICENSE`. pstack is by Lauren Tan, and `cursor-team-kit`, the source of `deslop`, `control-cli`, and `control-ui`, is by Cursor. Their notices ship as `src/LICENSE` and `src/LICENSE-cursor-team-kit`.
+MIT. See `LICENSE`. pstack is by Lauren Tan, and `cursor-team-kit`, the source of `deslop`, `control-cli`, and `control-ui`, is by Cursor. So is Thermos, the source of `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, and their two agents. Their notices ship as `src/LICENSE`, `src/LICENSE-cursor-team-kit`, and `src/LICENSE-thermos`.
