@@ -4,7 +4,7 @@
 
 1. Size the change per **Size the task first** in `SKILL.md`. When you can't map the affected code from a quick read, load the `how` skill with the `skill` tool and run it over the subsystem.
 2. When the design has several credible shapes and the pick is costly to reverse, load the `architect` skill with the `skill` tool and run it for parallel design exploration. A change with one obvious shape skips it.
-3. When the work splits across more than one worker, write the throughput checkpoint as four todo items. A single-owner change records `skip: single owner` instead:
+3. When the work splits across more than one worker, write the throughput checkpoint as four todo items. A single-owner change skips it:
    - **Blocking first steps.** Gates run before fan-out.
    - **Independent workstreams.** Disjoint files, services, or layers parallelize. Shared writes serialize.
    - **Shared mutable state.** Default to splitting the target (the `principle-separate-before-serializing-shared-state` skill). Serialize only for real invariants.

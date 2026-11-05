@@ -126,7 +126,7 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
   })
   assert.equal(
     bugFix.content,
-    `This is the \`poteto-mode\` Bug fix playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.\n\n### Bug fix\n\n1. Load the \`how\` skill with the \`skill\` tool. See [the mode](${mode}/SKILL.md).\n`,
+    `This is the \`poteto-mode\` Bug fix playbook. Keep the todo list as the Playbooks section of the \`poteto-mode\` skill says, and when you run a step that names a skill, load that skill with the \`skill\` tool.\n\n### Bug fix\n\n1. Load the \`how\` skill with the \`skill\` tool. See [the mode](${mode}/SKILL.md).\n`,
   )
   assert.equal(byId.get("untitled")[0].description, "Untitled")
   rmSync(root, { recursive: true, force: true })

@@ -88,7 +88,7 @@ function readPlaybooks(modeDir) {
       const path = join(dir, name)
       const { body } = parseFrontmatter(readFileSync(path, "utf8"))
       const title = body.match(/^### (.+)$/m)?.[1] ?? id
-      const frame = `This is the \`${MODE_AGENT}\` ${title} playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.`
+      const frame = `This is the \`${MODE_AGENT}\` ${title} playbook. Keep the todo list as the Playbooks section of the \`${MODE_AGENT}\` skill says, and when you run a step that names a skill, load that skill with the \`skill\` tool.`
       return {
         kind: "playbook",
         id,

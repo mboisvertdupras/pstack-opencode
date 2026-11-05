@@ -9,6 +9,6 @@ Distinct from **Runtime forensics**, which instruments the live process. Here th
 3. Narrow to the cause. Query for the frames that hold the most time and walk the call tree to the hot path. For a leak, follow the retainer chain from the leaked object to a GC root. For a spindump, find the thread stuck on-CPU or blocked and its wait reason.
 4. Attribute to source. Map the hot frame to file, symbol, and line via the artifact's own symbols. A frame with no source mapping is not yet a diagnosis. Resolve the symbols, or say plainly the artifact does not carry them.
 5. If you have a paired capture, diff the before and after artifacts to confirm. Otherwise, mark the finding as the strongest hypothesis the artifact supports, not a confirmed cause.
-6. Hand back a cited diagnosis, no fix unless asked. Route to Bug fix or Perf issue once the cause is known. Throughput checkpoint stays one line: `throughput checkpoint: n/a, read-only forensics`.
+6. Hand back a cited diagnosis, no fix unless asked. Route to Bug fix or Perf issue once the cause is known.
 
 **Reply:** Load the `unslop` skill with the `skill` tool, then write the artifact and format, the reduced finding, the source location, the artifact paths, and whether a paired capture confirmed it.
