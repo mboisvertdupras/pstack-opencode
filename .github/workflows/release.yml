@@ -35,4 +35,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: src
+        env:
+          NPM_CONFIG_PROVENANCE: "false"
         run: npm publish --tag latest
