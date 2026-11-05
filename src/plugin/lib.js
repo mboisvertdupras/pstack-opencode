@@ -181,11 +181,7 @@ export function commitGate(session, event) {
   return COMMIT_GATE
 }
 
-const CODE_TOOLS = new Set(["edit", "write", "apply_patch", "patch", "multiedit"])
-const CODE_AGENTS = new Set(["poteto-agent", "general"])
 const SKILL_FILE = /\/skills\/(?:poteto-mode\/playbooks\/([a-z0-9-]+)\.md|([a-z0-9-]+)\/SKILL\.md)$/
-
-export const isCodeAction = (event) => CODE_TOOLS.has(event.tool) || (event.tool === "subagent" && CODE_AGENTS.has(event.input.agent)) || isCommit(event)
 
 export function loadedSkill({ tool, input, status }, skills) {
   if (status !== "completed") return undefined
@@ -196,27 +192,13 @@ export function loadedSkill({ tool, input, status }, skills) {
   return skills.has(id) ? id : undefined
 }
 
-export const skipsPlaybook = ({ tool, input, status }) =>
-  status === "completed" && tool === "todowrite" && (input.todos ?? []).some((todo) => /^no playbook:/i.test(String(todo.content ?? "").trim()))
-
-export const isSkillEvent = (event, skills) => event.status === "completed" && (Boolean(loadedSkill(event, skills)) || skipsPlaybook(event))
+export const isSkillEvent = (event, skills) => Boolean(loadedSkill(event, skills))
 
 export function withEvent(record, event, skills) {
   const session = { loaded: [], ...record }
-  if (skipsPlaybook(event)) return session.skip ? record : { ...session, skip: true }
   const id = loadedSkill(event, skills)
-  if (skills.get(id)?.kind === "playbook") return session.playbook === id ? record : { ...session, playbook: id }
   if (!id || session.loaded.includes(id)) return record
   return { ...session, loaded: [...session.loaded, id] }
-}
-
-const PLAYBOOK_FIRST =
-  "pstack: poteto mode runs every task through a playbook. Load the matching playbook with the `skill` tool (Bug fix is `bug-fix`) and follow its steps. For a fully specified one-line edit, add a todo `no playbook: <reason>` instead. Then retry this call"
-
-export function actGate(session, event) {
-  if (!(session.mode || event.agent === MODE_AGENT)) return undefined
-  if (session.playbook || session.skip || !isCodeAction(event)) return undefined
-  return `${PLAYBOOK_FIRST}${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}.`
 }
 
 export function entryOps(want, have) {

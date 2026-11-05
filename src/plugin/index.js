@@ -6,12 +6,11 @@ import {
   MODE_AGENT,
   MODE_KEY,
   MODELS_KEY,
-  actGate,
   commandDescription,
   commandPrompt,
   commitGate,
   entryOps,
-  isCodeAction,
+  isCommit,
   isSkillEvent,
   modeEntry,
   modelsEntry,
@@ -61,8 +60,8 @@ export default {
     const skillsInOrder = inOrder()
     const sessionState = (sessionID) =>
       skillsInOrder(sessionID, async () => {
-        const { playbook, skip, loaded = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
-        return { mode: await commandedMode(sessionID), playbook, skip, loaded }
+        const { loaded = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
+        return { mode: await commandedMode(sessionID), loaded }
       })
     const record = (sessionID, event) =>
       skillsInOrder(sessionID, async () => {
@@ -163,10 +162,7 @@ export default {
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        if (isCodeAction(event)) {
-          const session = await sessionState(event.sessionID)
-          blocked = actGate(session, event) ?? commitGate(session, event)
-        }
+        if (isCommit(event)) blocked = commitGate(await sessionState(event.sessionID), event)
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }

@@ -35,5 +35,4 @@ Preconditions:
 - The harness config folder is not `~/.config/opencode`. Writing the user's real file changes their real sessions, not the test server's.
 - The entry updates at the next request, so read `entries` only after a turn.
 - The file is read by modification time. Two writes within the filesystem's timestamp resolution can look like one.
-- The pool and ladder recipes run under `build`, so no gate applies. Under poteto mode, the delegation is a code action, and the playbook-first gate holds it because the prompt loads no playbook.
 - The `setup-pstack` skill tells the agent to write `~/.config/opencode/pstack-models.md`, while the plugin reads `$XDG_CONFIG_HOME/opencode` when that is set. Drive the file directly, as these recipes do, instead of verifying through `/setup-pstack`.
