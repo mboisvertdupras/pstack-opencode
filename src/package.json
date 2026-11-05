@@ -2,6 +2,10 @@
   "name": "pstack-opencode",
   "version": "0.15.38-opencode",
   "description": "pstack for OpenCode.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mboisvertdupras/pstack-opencode.git"
+  },
   "type": "module",
   "license": "MIT",
   "exports": {

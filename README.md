@@ -89,6 +89,22 @@ test/                    Plugin, installer, and lint tests. skills.test.mjs lint
 	$H down
 	```
 
+## Cut a release
+
+Run the release script from an up-to-date `main` with a clean working tree.
+
+```sh
+npm run release -- 0.15.39-opencode
+```
+
+The script runs the tests and lint, sets the version in `src/package.json`, commits `Release <version>`, tags `v<version>`, and pushes `main` and the tag. The tag starts `.github/workflows/release.yml`. That workflow checks that the tag matches `src/package.json`, runs the tests and lint again, and publishes `src/` to npm with trusted publishing. GitHub's OIDC identity authenticates the publish, so no npm token or browser login is needed, and npm attaches a provenance attestation.
+
+Trusted publishing is set once per package by a maintainer with 2FA:
+
+```sh
+npm trust github pstack-opencode --file release.yml --repo mboisvertdupras/pstack-opencode --allow-publish
+```
+
 ## License
 
 MIT. See `LICENSE`. pstack is by Lauren Tan, and `cursor-team-kit`, the source of `deslop`, `control-cli`, and `control-ui`, is by Cursor. So is Thermos, the source of `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, and their two agents. Their notices ship as `src/LICENSE`, `src/LICENSE-cursor-team-kit`, and `src/LICENSE-thermos`.
