@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { parseFrontmatter, playbookRequires } from "../src/plugin/lib.js"
+import { parseFrontmatter } from "../src/plugin/lib.js"
 
 const LINK = /\]\(([^)\s]+)\)/g
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i
@@ -48,14 +48,6 @@ function frontmatterFindings(file, text) {
   return findings.map((message) => ({ file, line: 1, rule: "frontmatter", text: message }))
 }
 
-function requiresFindings(file, text, exists) {
-  if (!/\/poteto-mode\/playbooks\/[^/]+\.md$/.test(file)) return []
-  const root = file.slice(0, file.indexOf("/poteto-mode/playbooks/"))
-  return playbookRequires(parseFrontmatter(text).data)
-    .filter((id) => !exists(join(root, id, "SKILL.md")))
-    .map((id) => ({ file, line: 1, rule: "requires", text: id }))
-}
-
 function linkFindings(file, lines, exists) {
   return lines.flatMap(({ prose }, index) =>
     [...(prose ?? "").matchAll(LINK)]
@@ -89,7 +81,7 @@ export function lint(files, exists = existsSync) {
       ),
     )
     const markdown = isMarkdown(file) ? [...linkFindings(file, lines, exists), ...skillIdFindings(file, lines, exists)] : []
-    return [...frontmatterFindings(file, text), ...requiresFindings(file, text, exists), ...matches, ...markdown]
+    return [...frontmatterFindings(file, text), ...matches, ...markdown]
   })
 }
 

@@ -76,9 +76,6 @@ export function playbookSkills(body) {
   return [...new Set([...steps.matchAll(NAMED_SKILL)].map(([, id]) => id))]
 }
 
-const list = (value) => (value ?? "").split(",").map((item) => item.trim()).filter(Boolean)
-export const playbookRequires = (data) => list(data.requires)
-
 function readPlaybooks(modeDir) {
   const dir = join(modeDir, "playbooks")
   if (!existsSync(dir)) return []
@@ -89,7 +86,7 @@ function readPlaybooks(modeDir) {
     .map((name) => {
       const id = name.slice(0, -".md".length)
       const path = join(dir, name)
-      const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
+      const { body } = parseFrontmatter(readFileSync(path, "utf8"))
       const title = body.match(/^### (.+)$/m)?.[1] ?? id
       const frame = `This is the \`${MODE_AGENT}\` ${title} playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.`
       return {
@@ -102,8 +99,6 @@ function readPlaybooks(modeDir) {
         content: `${frame}\n\n${absoluteLinks(body, dir)}`,
         autoinvoke: false,
         skills: playbookSkills(body),
-        requires: playbookRequires(data),
-        gates: list(data.gates),
       }
     })
 }
@@ -201,73 +196,27 @@ export function loadedSkill({ tool, input, status }, skills) {
   return skills.has(id) ? id : undefined
 }
 
-const spawns =
-  (...agents) =>
-  ({ tool, input }) =>
-    tool === "subagent" && agents.includes(input.agent)
-const runsShell =
-  (pattern) =>
-  ({ tool, input }) =>
-    tool === "shell" && pattern.test(input.command)
-const EXPLORES = { by: spawns("explore"), finish: "spawn its `explore` subagents as the skill says" }
-
-export const RAN = {
-  how: EXPLORES,
-  architect: EXPLORES,
-  arena: EXPLORES,
-  interrogate: { by: spawns("general"), finish: "spawn its `general` adversaries as the skill says" },
-  why: {
-    by: (event) => spawns("general")(event) || runsShell(/\bgit\s+(?:log|blame)\b/)(event),
-    finish: "spawn its `general` subagents, or read the history with `git log` or `git blame`, as the skill says",
-  },
-}
-
-const isEvidence = (event) => Object.values(RAN).some((rule) => rule.by(event))
-
 export const skipsPlaybook = ({ tool, input, status }) =>
   status === "completed" && tool === "todowrite" && (input.todos ?? []).some((todo) => /^no playbook:/i.test(String(todo.content ?? "").trim()))
 
-export const isSkillEvent = (event, skills) => event.status === "completed" && (Boolean(loadedSkill(event, skills)) || isEvidence(event) || skipsPlaybook(event))
+export const isSkillEvent = (event, skills) => event.status === "completed" && (Boolean(loadedSkill(event, skills)) || skipsPlaybook(event))
 
 export function withEvent(record, event, skills) {
-  const session = { loaded: [], ran: [], ...record }
+  const session = { loaded: [], ...record }
   if (skipsPlaybook(event)) return session.skip ? record : { ...session, skip: true }
   const id = loadedSkill(event, skills)
   if (skills.get(id)?.kind === "playbook") return session.playbook === id ? record : { ...session, playbook: id }
-  if (id) return session.loaded.includes(id) ? record : { ...session, loaded: [...session.loaded, id] }
-  if (event.status !== "completed") return record
-  const fresh = session.loaded.filter((loaded) => !session.ran.includes(loaded) && RAN[loaded]?.by(event))
-  return fresh.length === 0 ? record : { ...session, ran: [...session.ran, ...fresh] }
-}
-
-const listed = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`)
-
-const READ_TOOLS = new Set(["read", "grep", "glob", "list"])
-export const isReadAction = ({ tool }) => READ_TOOLS.has(tool)
-
-const HOLDS = {
-  code: { reason: (skills) => `runs the ${skills} before any code change`, then: (event) => `retry this call${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}` },
-  reads: { reason: (skills) => `reads the code through the ${skills}`, then: (event, missing) => `use ${missing.length === 1 ? "its" : "their"} findings instead of reading files yourself` },
+  if (!id || session.loaded.includes(id)) return record
+  return { ...session, loaded: [...session.loaded, id] }
 }
 
 const PLAYBOOK_FIRST =
   "pstack: poteto mode runs every task through a playbook. Load the matching playbook with the `skill` tool (Bug fix is `bug-fix`) and follow its steps. For a fully specified one-line edit, add a todo `no playbook: <reason>` instead. Then retry this call"
 
-export function actGate(session, event, skills) {
+export function actGate(session, event) {
   if (!(session.mode || event.agent === MODE_AGENT)) return undefined
-  if (!session.playbook && !session.skip && isCodeAction(event)) return `${PLAYBOOK_FIRST}${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}.`
-  const playbook = skills.get(session.playbook)
-  const held = isCodeAction(event) ? "code" : isReadAction(event) && playbook?.gates.includes("reads") ? "reads" : undefined
-  if (!held) return undefined
-  const loadsOnly = event.tool === "subagent" && isEvidence(event)
-  const unfinished = (id) => !session.loaded.includes(id) || (!loadsOnly && RAN[id] && !session.ran.includes(id))
-  const missing = playbook?.requires.filter(unfinished) ?? []
-  if (missing.length === 0) return undefined
-  const steps = missing
-    .map((id) => (session.loaded.includes(id) ? `\`${id}\` is loaded but hasn't run: ${RAN[id].finish}` : `load \`${id}\` with the \`skill\` tool and run it`))
-    .join(", then ")
-  const names = `${listed(missing.map((id) => `\`${id}\``))} skill${missing.length === 1 ? "" : "s"}`
-  return `pstack: the ${playbook.title} playbook ${HOLDS[held].reason(names)}. ${steps[0].toUpperCase()}${steps.slice(1)}, then ${HOLDS[held].then(event, missing)}.`
+  if (session.playbook || session.skip || !isCodeAction(event)) return undefined
+  return `${PLAYBOOK_FIRST}${isCommit(event) ? " as its own `git commit` command, because this whole shell command was rejected" : ""}.`
 }
 
 export function entryOps(want, have) {

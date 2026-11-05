@@ -215,6 +215,15 @@ test("the matrix skills check fails when the skill loads only after the first ed
   assert.equal(check("matrix:bug@agent", tree(session("poteto-mode", [skill("tdd"), skill("how"), delegate()])), "skills").pass, true)
 })
 
+test("avoids passes when none of the expected-avoid skills load and fails naming the one that did", () => {
+  const clean = check("matrix:small-feature@agent", tree(session("poteto-mode", [skill("how"), edit()])), "avoids")
+  assert.deepEqual(clean, { pass: true, detail: "none of architect, arena, interrogate loaded" })
+  const loaded = check("matrix:small-feature@agent", tree(session("poteto-mode", [skill("architect"), edit()])), "avoids")
+  assert.deepEqual(loaded, { pass: false, detail: "loaded architect" })
+  const inChild = check("matrix:small-feature@agent", tree(session("poteto-mode", [delegate()]), session("poteto-agent", [skill("arena"), edit()])), "avoids")
+  assert.deepEqual(inChild, { pass: false, detail: "loaded arena" })
+})
+
 test("stay_out fails on a hidden skill or a playbook read, and ignores the mode's own attachment", () => {
   assert.deepEqual(check("matrix:typo@build", tree(session("build", [skill("how"), edit()])), "stay_out").pass, false)
   assert.deepEqual(check("matrix:typo@build", tree(session("build", [readPlaybook("feature"), edit()])), "stay_out").pass, false)
@@ -232,7 +241,7 @@ test("decided fires on the parent's first edit or poteto-agent delegation only",
 })
 
 test("matrix shorthands expand to registry rows under both entries", () => {
-  assert.equal(selectScenarios(["matrix"]).length, 22)
+  assert.equal(selectScenarios(["matrix"]).length, 24)
   assert.ok(selectScenarios(["matrix@build"]).every((name) => scenarios[name].drive.agent === "build"))
   assert.deepEqual(selectScenarios(["matrix:typo@agent", "investigate"]), ["matrix:typo@agent", "investigate"])
   assert.deepEqual(selectScenarios(["matrix@nope"]), ["matrix@nope"])

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { MODE_AGENT, RAN, readSkills } from "../../../../src/plugin/lib.js"
+import { MODE_AGENT, readSkills } from "../../../../src/plugin/lib.js"
 import { sessionTree } from "./claude-stream.mjs"
 
 const SKILLS = join(import.meta.dirname, "..", "..", "..", "..", "src", "skills")
@@ -12,6 +12,17 @@ const AUTONOMOUS = "Work autonomously without asking questions. There is no git 
 const FEATURE_PROMPT = `Add discount codes to this invoicing service. A code takes either a percentage or a fixed amount off, has an expiry date, and each customer can use a given code only once. Customers apply a code at checkout, and the discount shows as its own line on the invoice and in the invoice email. ${AUTONOMOUS}`
 const INVESTIGATE_PROMPT = "How is an invoice's total computed in this service, from the items in a customer's cart through checkout to the amount shown in the invoice email? Walk through it across the modules and cite the code. Answer without asking questions."
 const PLAIN_PROMPT = 'Add an exported `isZero(amount)` helper to src/money.js that returns true for zero cents, then commit it on the current branch with the message "Add isZero". Work autonomously without asking questions.'
+
+const SMALL_FEATURE_PROMPT = `Add an exported \`isZero(amount)\` helper to src/money.js that returns true for zero cents, with a test. ${AUTONOMOUS}`
+
+const spawns = (agent) => ({ tool, input }) => tool === "subagent" && input.agent === agent
+const RAN = {
+  how: spawns("explore"),
+  architect: spawns("explore"),
+  arena: spawns("explore"),
+  interrogate: spawns("general"),
+  why: (event) => spawns("general")(event) || (event.tool === "shell" && /\bgit\s+(?:log|blame)\b/.test(event.input.command)),
+}
 
 const toolCall = ({ delegate, shell }) => ({ tool: delegate ? "subagent" : shell !== undefined ? "shell" : undefined, input: { agent: delegate, command: shell } })
 
@@ -182,7 +193,7 @@ export const checks = {
     const events = view.parent.events
     const ran = expect.skills.filter((id) => {
       const load = events.find((event) => event.skill === id && event.time < anchor)
-      return load && events.some((event) => event.time > load.time && event.time < anchor && RAN[id]?.by(toolCall(event)))
+      return load && events.some((event) => event.time > load.time && event.time < anchor && RAN[id]?.(toolCall(event)))
     })
     return { pass: ran.length > 0, detail: ran.length ? `${ran.join(", ")} ran before acting` : `none of ${expect.skills.join(", ")} ran before acting` }
   },
@@ -196,6 +207,11 @@ export const checks = {
     const first = loads.slice(0, 3).map((event) => event.skill)
     const when = Number.isFinite(anchor) ? "before the first edit or poteto-agent delegation" : "with no edit or poteto-agent delegation"
     return { pass: Boolean(hit), detail: `${hit ? `${hit.skill} loaded ${when}` : `none of ${expect.skills.join(", ")} loaded ${when}`}; first loads ${first.join(", ") || "none"}` }
+  },
+
+  avoids({ sessions }, { expect }) {
+    const loaded = [...new Set(sessions.flatMap((session) => session.events.map((event) => event.skill)).filter((id) => expect.avoid.includes(id)))]
+    return { pass: loaded.length === 0, detail: loaded.length ? `loaded ${loaded.join(", ")}` : `none of ${expect.avoid.join(", ")} loaded` }
   },
 
   stay_out(view, { attaches }) {
@@ -225,6 +241,7 @@ export const MATRIX_CASES = [
     expect: { playbook: "refactoring", skills: ["how"] },
   },
   { id: "feature", prompt: FEATURE_PROMPT, expect: { playbook: "feature", skills: ["how", "architect", "arena"] } },
+  { id: "small-feature", prompt: SMALL_FEATURE_PROMPT, expect: { avoid: ["architect", "arena", "interrogate"] } },
   { id: "how", prompt: INVESTIGATE_PROMPT, expect: { playbook: "investigation", skills: ["how"] } },
   {
     id: "why",
@@ -254,7 +271,7 @@ export const MATRIX_ENTRIES = {
 const MATRIX_GROUPS = { matrix: ["agent", "build"], "matrix@cc": ["cc-slash"], compare: ["agent", "slash", "cc-slash"] }
 const DECIDE_MS = 4 * MINUTE
 
-const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills", "skills_ran"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
+const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills", "skills_ran"] : []), ...(expect.avoid ? ["avoids"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
 
 export const scenarios = {
   "feature-agent": { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },

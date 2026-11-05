@@ -1,8 +1,3 @@
----
-requires: interrogate
-gates: reads
----
-
 ### Review
 
 **You own the verdict. Frame, attack, verify.**

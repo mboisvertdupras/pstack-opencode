@@ -32,5 +32,4 @@ Preconditions:
 - `opencode run "/how ..."` sends the slash as plain text. It never reaches the command. Use `$H command`.
 - The shadow check compares the registered path with pstack's path at the session's directory. A user skill added mid-run can take a few seconds to register.
 - `cmd-shadow` changes `doctor`'s skill count while the user skill exists. Remove it before running `doctor` again.
-- An attached skill is not a load for the [gates](./gates.md). In a poteto-mode session, `/how` attaching `how` does not satisfy a playbook that requires `how`. Only a `skill` call or a read of the skill's file counts.
 - Every recipe here runs under `build`, so no gate applies. Under `--agent poteto-mode`, a command that edits meets the playbook-first gate.

@@ -1,8 +1,3 @@
----
-requires: how
-gates: reads
----
-
 ### Investigation
 
 **You own the answer. Plan, route, write.**

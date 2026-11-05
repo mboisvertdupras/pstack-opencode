@@ -105,7 +105,7 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
   mkdirSync(join(mode, "playbooks"), { recursive: true })
   mkdirSync(join(root, "skills", "babysit"))
   writeFileSync(join(mode, "SKILL.md"), "---\nname: poteto-mode\ndescription: Mode.\n---\n\n## Playbooks\n\n- **Bug fix.** A defect to fix.\n")
-  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "---\nrequires: how,  why\n---\n\n### Bug fix\n\n1. Load the `how` skill with the `skill` tool. See [the mode](../SKILL.md).\n")
+  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "### Bug fix\n\n1. Load the `how` skill with the `skill` tool. See [the mode](../SKILL.md).\n")
   writeFileSync(join(mode, "playbooks", "untitled.md"), "### Untitled\n\n1. Do it.\n")
   writeFileSync(join(mode, "playbooks", "babysit.md"), "### Babysit\n\n1. Watch.\n")
   writeFileSync(join(root, "skills", "babysit", "SKILL.md"), "---\nname: babysit\ndescription: A user-facing babysit skill.\n---\n\nBody\n")
@@ -123,10 +123,7 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
     content: undefined,
     autoinvoke: false,
     skills: ["how"],
-    requires: ["how", "why"],
-    gates: [],
   })
-  assert.deepEqual(byId.get("untitled")[0].requires, [])
   assert.equal(
     bugFix.content,
     `This is the \`poteto-mode\` Bug fix playbook. Copy its numbered steps verbatim into the todo list, and when a step names a skill, load that skill with the \`skill\` tool.\n\n### Bug fix\n\n1. Load the \`how\` skill with the \`skill\` tool. See [the mode](${mode}/SKILL.md).\n`,
@@ -165,96 +162,39 @@ test("every shipped playbook registers under its stem with its Playbooks list en
   const playbooks = readSkills(dir).filter((skill) => skill.kind === "playbook")
   assert.deepEqual(playbooks.map((playbook) => playbook.id).sort(), stems.sort())
   for (const playbook of playbooks) assert.match(playbook.description, /\.$/, `${playbook.id} has a Playbooks list entry`)
-  const gated = Object.fromEntries(playbooks.filter((playbook) => playbook.requires.length > 0).map((playbook) => [playbook.id, playbook.requires]))
-  assert.deepEqual(gated, {
-    "bug-fix": ["how", "why"],
-    feature: ["how", "architect"],
-    investigation: ["how"],
-    hillclimb: ["how"],
-    "perf-issue": ["benchmark-checklist", "how"],
-    refactoring: ["how"],
-    review: ["interrogate"],
-  })
-  const readGated = playbooks.filter((playbook) => playbook.gates.includes("reads")).map((playbook) => playbook.id)
-  assert.deepEqual(readGated.sort(), ["investigation", "review"])
 })
 
 const CATALOG = new Map([
-  ["perf", { kind: "playbook", id: "perf", title: "Perf issue", requires: ["bench", "how", "why"], gates: [] }],
-  ["notes", { kind: "playbook", id: "notes", title: "Notes", requires: [], gates: [] }],
-  ["ask", { kind: "playbook", id: "ask", title: "Investigation", requires: ["how"], gates: ["reads"] }],
+  ["perf", { kind: "playbook", id: "perf", title: "Perf issue" }],
+  ["notes", { kind: "playbook", id: "notes", title: "Notes" }],
   ["how", { kind: "skill", id: "how" }],
 ])
 const editBy = (agent) => ({ tool: "edit", agent, input: { path: "a.js" } })
 const spawn = (agent) => ({ tool: "subagent", agent: "build", input: { agent }, status: "completed" })
 
-test("the act gate names each unfinished required skill in order with how to finish it, only for code actions in poteto mode", () => {
-  const session = { mode: true, playbook: "perf", loaded: ["how"], ran: [] }
-  assert.equal(
-    actGate(session, editBy("build"), CATALOG),
-    "pstack: the Perf issue playbook runs the `bench`, `how` and `why` skills before any code change. Load `bench` with the `skill` tool and run it, then `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then load `why` with the `skill` tool and run it, then retry this call.",
-  )
-  assert.equal(
-    actGate({ ...session, loaded: ["bench", "how", "why"], ran: ["why"] }, editBy("build"), CATALOG),
-    "pstack: the Perf issue playbook runs the `how` skill before any code change. `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then retry this call.",
-  )
-  assert.equal(actGate({ ...session, loaded: ["bench", "how", "why"], ran: ["how", "why"] }, editBy("build"), CATALOG), undefined)
-  assert.equal(actGate({ ...session, mode: false }, editBy("build"), CATALOG), undefined)
-  assert.ok(actGate({ ...session, mode: false }, editBy("poteto-mode"), CATALOG))
-  assert.equal(actGate(session, { tool: "subagent", agent: "build", input: { agent: "explore" } }, CATALOG), undefined)
-  assert.equal(actGate(session, { tool: "shell", agent: "build", input: { command: "echo > a.js" } }, CATALOG), undefined)
-  assert.equal(actGate({ ...session, playbook: "notes" }, editBy("build"), CATALOG), undefined)
-  assert.equal(actGate({ ...session, playbook: "gone" }, editBy("build"), CATALOG), undefined)
-})
-
 test("with no playbook or skip recorded, poteto mode holds code actions only, with the commit suffix on a commit", () => {
-  const bare = { mode: true, loaded: [], ran: [] }
+  const bare = { mode: true, loaded: [] }
   const commit = { tool: "shell", agent: "build", input: { command: "git commit -m a" } }
-  assert.match(actGate(bare, editBy("build"), CATALOG), /^pstack: poteto mode runs every task through a playbook\. .*`no playbook: <reason>` instead\. Then retry this call\.$/)
-  assert.match(actGate(bare, commit, CATALOG), /Then retry this call as its own `git commit` command, because this whole shell command was rejected\.$/)
-  assert.ok(actGate(bare, spawn("general"), CATALOG))
-  assert.ok(actGate({ ...bare, mode: false }, editBy("poteto-mode"), CATALOG))
+  assert.match(actGate(bare, editBy("build")), /^pstack: poteto mode runs every task through a playbook\. .*`no playbook: <reason>` instead\. Then retry this call\.$/)
+  assert.match(actGate(bare, commit), /Then retry this call as its own `git commit` command, because this whole shell command was rejected\.$/)
+  assert.ok(actGate(bare, spawn("general")))
+  assert.ok(actGate({ ...bare, mode: false }, editBy("poteto-mode")))
   for (const event of [spawn("explore"), { tool: "read", agent: "build", input: {} }, { tool: "shell", agent: "build", input: { command: "ls" } }, { tool: "skill", agent: "build", input: {} }]) {
-    assert.equal(actGate(bare, event, CATALOG), undefined)
+    assert.equal(actGate(bare, event), undefined)
   }
-  assert.equal(actGate({ ...bare, mode: false }, editBy("build"), CATALOG), undefined)
-  assert.equal(actGate({ ...bare, skip: true }, editBy("build"), CATALOG), undefined)
-  assert.match(actGate({ ...bare, skip: true, playbook: "perf" }, editBy("build"), CATALOG), /Perf issue playbook/)
-  assert.match(actGate({ ...bare, playbook: "perf" }, editBy("build"), CATALOG), /Perf issue playbook/)
+  assert.equal(actGate({ ...bare, mode: false }, editBy("build")), undefined)
+  assert.equal(actGate({ ...bare, skip: true }, editBy("build")), undefined)
+  assert.equal(actGate({ ...bare, playbook: "perf" }, editBy("build")), undefined)
 })
 
 test("a completed todowrite with a no playbook item records the skip, trimmed and case-insensitive", () => {
   const todos = (status, ...contents) => ({ tool: "todowrite", input: { todos: contents.map((content) => ({ content })) }, status })
-  assert.deepEqual(withEvent(undefined, todos("completed", "x", "  No Playbook: typo"), CATALOG), { loaded: [], ran: [], skip: true })
-  assert.deepEqual(withEvent({ playbook: "perf", loaded: ["how"], ran: [] }, todos("completed", "no playbook: typo"), CATALOG), { playbook: "perf", loaded: ["how"], ran: [], skip: true })
+  assert.deepEqual(withEvent(undefined, todos("completed", "x", "  No Playbook: typo"), CATALOG), { loaded: [], skip: true })
+  assert.deepEqual(withEvent({ playbook: "perf", loaded: ["how"] }, todos("completed", "no playbook: typo"), CATALOG), { playbook: "perf", loaded: ["how"], skip: true })
   const skipped = withEvent(undefined, todos("completed", "no playbook: typo"), CATALOG)
   assert.equal(withEvent(skipped, todos("completed", "no playbook: again"), CATALOG), skipped)
   assert.equal(withEvent(undefined, todos("error", "no playbook: typo"), CATALOG), undefined)
   assert.equal(withEvent(undefined, todos("completed", "no playbook typo", "Fix the no playbook: case"), CATALOG), undefined)
-})
-
-test("a read-gated playbook holds the parent's reads until its required skills run, and other playbooks never hold reads", () => {
-  const read = { tool: "read", agent: "build", input: { path: "src/a.js" } }
-  const asking = { mode: true, playbook: "ask", loaded: ["how"], ran: [] }
-  assert.equal(
-    actGate(asking, read, CATALOG),
-    "pstack: the Investigation playbook reads the code through the `how` skill. `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then use its findings instead of reading files yourself.",
-  )
-  for (const tool of ["grep", "glob", "list"]) assert.match(actGate(asking, { ...read, tool }, CATALOG), /reads the code through the `how` skill/)
-  assert.match(actGate(asking, editBy("build"), CATALOG), /runs the `how` skill before any code change/)
-  assert.equal(actGate(asking, { tool: "shell", agent: "build", input: { command: "git blame src/a.js" } }, CATALOG), undefined)
-  assert.equal(actGate({ ...asking, ran: ["how"] }, read, CATALOG), undefined)
-  assert.equal(actGate({ ...asking, mode: false }, read, CATALOG), undefined)
-  assert.equal(actGate({ mode: true, playbook: "perf", loaded: [], ran: [] }, read, CATALOG), undefined)
-})
-
-test("a general spawn waits for the required loads but not the runs, so why can spawn its investigators", () => {
-  const general = { tool: "subagent", agent: "build", input: { agent: "general" } }
-  const delegate = { tool: "subagent", agent: "build", input: { agent: "poteto-agent" } }
-  const loadedOnly = { mode: true, playbook: "perf", loaded: ["bench", "how", "why"], ran: [] }
-  assert.equal(actGate(loadedOnly, general, CATALOG), undefined)
-  assert.match(actGate(loadedOnly, delegate, CATALOG), /`how` is loaded but hasn't run/)
-  assert.match(actGate({ ...loadedOnly, loaded: ["how"] }, general, CATALOG), /Load `bench` with the `skill` tool/)
 })
 
 test("a completed skill load or pstack skill file read is a load", () => {
@@ -265,21 +205,16 @@ test("a completed skill load or pstack skill file read is a load", () => {
   assert.equal(loadedSkill({ tool: "read", input: { path: "/x/skills/mine/SKILL.md" }, status: "completed" }, CATALOG), undefined)
 })
 
-test("a skill runs only on matching evidence after its load, and a newer playbook replaces the older one", () => {
+test("loads are recorded once, other events record nothing, and a newer playbook replaces the older one", () => {
   const load = (id) => ({ tool: "skill", input: { id }, status: "completed" })
-  const shell = (command, status = "completed") => ({ tool: "shell", input: { command }, status })
   const apply = (...events) => events.reduce((record, event) => withEvent(record, event, CATALOG), undefined)
 
   assert.equal(apply(spawn("explore")), undefined)
-  assert.deepEqual(apply(spawn("explore"), load("how")), { loaded: ["how"], ran: [] })
-  assert.deepEqual(apply(load("how"), spawn("general"), spawn("explore")), { loaded: ["how"], ran: ["how"] })
-  assert.deepEqual(apply(load("why"), shell("git log -p src/a.js", "error"), shell("git status")), { loaded: ["why"], ran: [] })
-  assert.deepEqual(apply(load("why"), shell("cd src && git blame a.js")), { loaded: ["why"], ran: ["why"] })
-  assert.deepEqual(apply(load("interrogate"), spawn("poteto-agent")), { loaded: ["interrogate"], ran: [] })
-  assert.deepEqual(apply(load("interrogate"), spawn("general")), { loaded: ["interrogate"], ran: ["interrogate"] })
+  assert.deepEqual(apply(spawn("explore"), load("how")), { loaded: ["how"] })
+  assert.equal(apply({ tool: "skill", input: { id: "how" }, status: "error" }), undefined)
 
   const started = apply(load("how"))
   assert.equal(withEvent(started, load("how"), CATALOG), started)
-  assert.equal(withEvent(started, spawn("poteto-agent"), CATALOG), started)
-  assert.deepEqual(apply(load("how"), load("perf"), load("notes")), { loaded: ["how"], ran: [], playbook: "notes" })
+  assert.equal(withEvent(started, spawn("general"), CATALOG), started)
+  assert.deepEqual(apply(load("how"), load("perf"), load("notes")), { loaded: ["how"], playbook: "notes" })
 })

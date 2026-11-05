@@ -1,7 +1,3 @@
----
-requires: how, why
----
-
 ### Bug fix
 
 **You own this task. Plan, review, verify.** Delegate investigation and the fix to subagents, stay in the lead. Pick each subagent's reasoning level for the job, per the Subagents section.

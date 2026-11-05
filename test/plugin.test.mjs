@@ -323,10 +323,16 @@ test("the gate matches git commit behind global flags and nothing that only ment
 
 const edit = (sessionID, agent = "build") => ({ tool: "edit", sessionID, agent, input: { path: "src/money.js" } })
 const delegate = (sessionID, subagent, agent = "build") => ({ tool: "subagent", sessionID, agent, input: { agent: subagent, prompt: "fix it" } })
-const spawned = (sessionID, subagent) => ({ ...delegate(sessionID, subagent), status: "completed" })
-const ran = (sessionID, command) => ({ ...shell(sessionID, "build", command), status: "completed" })
-const BUG_FIX_GATE =
-  "pstack: the Bug fix playbook runs the `how` and `why` skills before any code change. Load `how` with the `skill` tool and run it, then load `why` with the `skill` tool and run it, then retry this call."
+
+const readOf = (sessionID, path, tool = "read", agent = "build") => ({ tool, sessionID, agent, input: path === undefined ? {} : { path } })
+
+async function projectSession() {
+  const sessions = { s1: { agent: "build", location: { directory: "/repo" } }, s2: { agent: "build", location: { directory: "/repo" } }, s3: { agent: "explore", location: { directory: "/repo" } } }
+  const { ctx, state } = fakeContext({ sessions })
+  await plugin.setup(ctx)
+  await potetoMode(state, "s1")
+  return state
+}
 
 const PLAYBOOK_FIRST =
   "pstack: poteto mode runs every task through a playbook. Load the matching playbook with the `skill` tool (Bug fix is `bug-fix`) and follow its steps. For a fully specified one-line edit, add a todo `no playbook: <reason>` instead. Then retry this call."
@@ -339,46 +345,6 @@ async function potetoSession(storage) {
   return state
 }
 
-test("a /poteto-mode Bug fix blocks code edits until how and why load and run", async () => {
-  const state = await potetoSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: BUG_FIX_GATE })
-
-  await state.hooks["execute.after"](spawned("s1", "explore"))
-  await state.hooks["execute.after"](loaded("s1", "build", "how"))
-  await state.hooks["execute.after"](loaded("s1", "build", "why"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), {
-    message:
-      "pstack: the Bug fix playbook runs the `how` and `why` skills before any code change. `how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then `why` is loaded but hasn't run: spawn its `general` subagents, or read the history with `git log` or `git blame`, as the skill says, then retry this call.",
-  })
-
-  await state.hooks["execute.after"](spawned("s1", "explore"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /runs the `why` skill before any code change\. `why` is loaded but hasn't run/)
-
-  await state.hooks["execute.after"](ran("s1", "git log --oneline -- src/money.js"))
-  await state.hooks["execute.before"](edit("s1"))
-  for (const tool of ["write", "apply_patch", "patch", "multiedit"]) await state.hooks["execute.before"]({ ...edit("s1"), tool })
-})
-
-test("a Bug fix blocks a code delegation as its first action, and never an explore subagent or a read", async () => {
-  const state = await potetoSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "poteto-agent")), { message: BUG_FIX_GATE })
-  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "general")), { message: BUG_FIX_GATE })
-  await state.hooks["execute.before"](delegate("s1", "explore"))
-  for (const tool of ["read", "grep", "glob", "skill", "todowrite"]) await state.hooks["execute.before"]({ tool, sessionID: "s1", agent: "build", input: {} })
-  await state.hooks["execute.before"](shell("s1", "build", "printf x > src/money.js"))
-
-  await state.hooks["execute.after"](loaded("s1", "build", "how"))
-  await state.hooks["execute.after"](loaded("s1", "build", "why"))
-  await state.hooks["execute.before"](delegate("s1", "general"))
-  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "poteto-agent")), /`how` is loaded but hasn't run/)
-
-  await state.hooks["execute.after"](spawned("s1", "explore"))
-  await state.hooks["execute.after"](spawned("s1", "general"))
-  await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
-})
-
 test("reading a playbook file records it as the session's playbook, and a failed load records nothing", async () => {
   const state = await potetoSession()
   const read = (path, status = "completed") => ({ tool: "read", sessionID: "s1", agent: "build", input: { path }, status })
@@ -386,16 +352,15 @@ test("reading a playbook file records it as the session's playbook, and a failed
   await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: PLAYBOOK_FIRST })
 
   await state.hooks["execute.after"](read("/home/me/pstack/src/skills/poteto-mode/playbooks/feature.md"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /the Feature playbook runs the `how` and `architect` skills/)
-  await state.hooks["execute.after"](read("/home/me/pstack/src/skills/how/SKILL.md"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /`how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then load `architect`/)
+  await state.hooks["execute.before"](edit("s1"))
 })
 
-test("a playbook with no requires edits freely", async () => {
-  const state = await potetoSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "prototype"))
+test("with a playbook loaded and no other skill, edits, delegations and project reads all pass", async () => {
+  const state = await projectSession()
+  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
   await state.hooks["execute.before"](edit("s1"))
   await state.hooks["execute.before"](delegate("s1", "poteto-agent"))
+  for (const tool of ["read", "grep", "glob"]) await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js", tool))
 })
 
 const todos = (sessionID, ...contents) => ({ tool: "todowrite", sessionID, agent: "build", input: { todos: contents.map((content) => ({ content, status: "pending" })) }, status: "completed" })
@@ -419,18 +384,6 @@ test("a /poteto-mode session holds code actions until a playbook loads or a todo
   await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), /load the `deslop` skill/)
   await state.hooks["execute.after"](loaded("s1", "build", "deslop"))
   await state.hooks["execute.before"](shell("s1", "build", COMMIT))
-})
-
-test("a playbook loaded after the skip, or instead of it, hands off to the playbook's own gate", async () => {
-  const state = await potetoSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), { message: BUG_FIX_GATE })
-
-  const skipped = await potetoSession()
-  await skipped.hooks["execute.after"](todos("s1", "no playbook: typo"))
-  await skipped.hooks["execute.before"](edit("s1"))
-  await skipped.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-  await assert.rejects(async () => skipped.hooks["execute.before"](edit("s1")), { message: BUG_FIX_GATE })
 })
 
 test("the playbook-first rule never holds reads, shell, explore, skill, or a plain build or delegate session", async () => {
@@ -468,42 +421,36 @@ test("the no-playbook skip survives a plugin restart on the same storage", async
 test("the poteto-mode agent is gated, and plain build sessions and delegates are not", async () => {
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "poteto-mode" }, s2: { agent: "build" }, s3: { agent: "poteto-agent" } } })
   await plugin.setup(ctx)
+  await assert.rejects(async () => state.hooks["execute.before"](edit("s1", "poteto-mode")), { message: PLAYBOOK_FIRST })
   await state.hooks["execute.after"](loaded("s1", "poteto-mode", "bug-fix"))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1", "poteto-mode")), { message: BUG_FIX_GATE })
+  await state.hooks["execute.before"](edit("s1", "poteto-mode"))
 
-  await state.hooks["execute.after"](loaded("s2", "build", "bug-fix"))
   await state.hooks["execute.before"](edit("s2"))
   await state.hooks["execute.before"](delegate("s2", "general"))
-  await state.hooks["execute.after"](loaded("s3", "poteto-agent", "bug-fix"))
   await state.hooks["execute.before"](edit("s3", "poteto-agent"))
 })
 
-test("the playbook and the loaded and run skills survive a plugin restart on the same storage", async () => {
+test("the playbook survives a plugin restart on the same storage, and the deslop load still gates commits", async () => {
   const first = await potetoSession()
   await first.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
-  await first.hooks["execute.after"](loaded("s1", "build", "how"))
-  await first.hooks["execute.after"](spawned("s1", "explore"))
-  await first.hooks["execute.after"](loaded("s1", "build", "deslop"))
 
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } }, storage: first.storage })
   await plugin.setup(ctx)
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /runs the `why` skill before any code change\. Load `why`/)
-  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", "git commit -m a")), /runs the `why` skill.*as its own `git commit` command/)
-  await state.hooks["execute.after"](loaded("s1", "build", "why"))
-  await state.hooks["execute.after"](ran("s1", "git blame src/money.js"))
   await state.hooks["execute.before"](edit("s1"))
-  await state.hooks["execute.before"](shell("s1", "build", "git commit -m a"))
+  await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", COMMIT)), /load the `deslop` skill/)
+  await state.hooks["execute.after"](loaded("s1", "build", "deslop"))
+  await state.hooks["execute.before"](shell("s1", "build", COMMIT))
 })
 
 test("loads that finish together all land in storage", async () => {
   const state = await potetoSession()
-  await Promise.all(["bug-fix", "how"].map((id) => state.hooks["execute.after"](loaded("s1", "build", id))))
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /the Bug fix playbook runs the `how` and `why` skills before any code change\. `how` is loaded but hasn't run/)
+  await Promise.all(["bug-fix", "deslop"].map((id) => state.hooks["execute.after"](loaded("s1", "build", id))))
+  await state.hooks["execute.before"](edit("s1"))
+  await state.hooks["execute.before"](shell("s1", "build", COMMIT))
 })
 
 test("a storage error during the gate lookup lets a code action through", async () => {
   const state = await potetoSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "bug-fix"))
   state.storage = new Proxy(state.storage, {
     get() {
       throw new Error("storage hiccup")
@@ -518,65 +465,4 @@ test("a storage error during the gate lookup lets a code action through", async 
     console.error = original
   }
   assert.equal(errors.length, 1)
-})
-
-const readOf = (sessionID, path, tool = "read", agent = "build") => ({ tool, sessionID, agent, input: path === undefined ? {} : { path } })
-const INVESTIGATION_GATE =
-  "pstack: the Investigation playbook reads the code through the `how` skill. Load `how` with the `skill` tool and run it, then use its findings instead of reading files yourself."
-
-async function projectSession() {
-  const sessions = { s1: { agent: "build", location: { directory: "/repo" } }, s2: { agent: "build", location: { directory: "/repo" } }, s3: { agent: "explore", location: { directory: "/repo" } } }
-  const { ctx, state } = fakeContext({ sessions })
-  await plugin.setup(ctx)
-  await potetoMode(state, "s1")
-  return state
-}
-
-test("an Investigation holds the parent's project reads, greps and globs until how loads and its explorer runs", async () => {
-  const state = await projectSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "investigation"))
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/money.js")), { message: INVESTIGATION_GATE })
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "src/money.js")), { message: INVESTIGATION_GATE })
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", undefined, "grep")), { message: INVESTIGATION_GATE })
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src", "glob")), { message: INVESTIGATION_GATE })
-  await assert.rejects(async () => state.hooks["execute.before"](edit("s1")), /runs the `how` skill before any code change/)
-
-  await state.hooks["execute.before"](readOf("s1", join(SRC, "skills", "how", "SKILL.md")))
-  await state.hooks["execute.before"](readOf("s1", join(SRC, "skills"), "glob"))
-  await state.hooks["execute.before"](readOf("s1", "/etc/hosts"))
-  await state.hooks["execute.before"](shell("s1", "build", "git blame src/money.js"))
-  await state.hooks["execute.before"](delegate("s1", "explore"))
-
-  await state.hooks["execute.after"](loaded("s1", "build", "how"))
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/money.js")), /`how` is loaded but hasn't run: spawn its `explore` subagents as the skill says, then use its findings/)
-  await state.hooks["execute.after"](spawned("s1", "explore"))
-  for (const tool of ["read", "grep", "glob"]) await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js", tool))
-})
-
-test("a Review holds reads until interrogate loads and spawns its general adversaries", async () => {
-  const state = await projectSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "review"))
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/cart/checkout.js")), {
-    message: "pstack: the Review playbook reads the code through the `interrogate` skill. Load `interrogate` with the `skill` tool and run it, then use its findings instead of reading files yourself.",
-  })
-  await assert.rejects(async () => state.hooks["execute.before"](delegate("s1", "general")), /runs the `interrogate` skill before any code change/)
-
-  await state.hooks["execute.after"](loaded("s1", "build", "interrogate"))
-  await state.hooks["execute.before"](delegate("s1", "general"))
-  await assert.rejects(async () => state.hooks["execute.before"](readOf("s1", "/repo/src/cart/checkout.js")), /`interrogate` is loaded but hasn't run: spawn its `general` adversaries/)
-  await state.hooks["execute.after"](spawned("s1", "general"))
-  await state.hooks["execute.before"](readOf("s1", "/repo/src/cart/checkout.js"))
-})
-
-test("a code-gated playbook, a plain build session, and a subagent session never hold reads", async () => {
-  const state = await projectSession()
-  await state.hooks["execute.after"](loaded("s1", "build", "feature"))
-  await state.hooks["execute.before"](readOf("s1", "/repo/src/money.js"))
-  await state.hooks["execute.before"](readOf("s1", undefined, "grep"))
-
-  for (const [sessionID, agent] of [["s2", "build"], ["s3", "explore"]]) {
-    await state.hooks["execute.after"](loaded(sessionID, agent, "investigation"))
-    await state.hooks["execute.before"](readOf(sessionID, "/repo/src/money.js", "read", agent))
-    await state.hooks["execute.before"](readOf(sessionID, undefined, "grep", agent))
-  }
 })

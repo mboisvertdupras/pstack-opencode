@@ -1,7 +1,3 @@
----
-requires: how, architect
----
-
 ### Feature
 
 **You own the design. Plan, review, verify.** Delegate implementation. Stay in the lead.
