@@ -179,7 +179,7 @@ test("a playbook or SKILL.md read through the shell counts as a read or a load",
 })
 
 test("the matrix playbook check passes when the first todowrite carries step 1, whitespace and backticks aside", () => {
-  const result = check("matrix:feature@build", tree(session("build", [todos("Load the how skill with the  skill tool\nand run it over the affected subsystem.", "Name the data shape")])), "playbook")
+  const result = check("matrix:feature@build", tree(session("build", [todos("Size the change per **Size the task first** in `SKILL.md`.  When you can't map the affected code\nfrom a quick read, load the how skill with the skill tool and run it over the subsystem.", "Name the data shape")])), "playbook")
   assert.deepEqual([result.pass, result.picked], [true, "feature"])
 })
 

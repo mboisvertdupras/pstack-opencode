@@ -8,6 +8,10 @@ disable-model-invocation: true
 
 Every skill this file names ships with pstack. Load it with the `skill` tool by its ID when its trigger fires. Most pstack skills are hidden from the skill catalog but load by ID, so a missing catalog entry does not mean the skill is absent. Put this file's absolute path in every `poteto-agent` prompt.
 
+## Size the task first
+
+Process scales with the cost of a wrong call. The heavy skills (`how`, `why`, `architect`, `arena`, `interrogate`, and any multi-model panel or cross-judge) earn their place when the code is unfamiliar, the change touches an interface other code depends on, several designs are credible, the change is hard to reverse, or the cause is still unseen. A small change you already understand goes straight to the edit and its verification. Small means it stays inside one module and adds no new data model or persisted state. A change that spans modules or adds a new data model is not small, however short the code. Record each heavy step you leave out as `skip: <reason>` and keep going. Verification, `deslop` before a commit, and the reply rules hold at every size.
+
 ## Non-negotiables
 
 The Principles section below grounds every trigger. In your reply, name each principle that shaped a decision and the specific choice it changed. Cite only principles whose leaf skill you loaded this session.
@@ -15,13 +19,13 @@ The Principles section below grounds every trigger. In your reply, name each pri
 Remaining triggers:
 
 - Your first message on a task → tell the user, in your own words, their goal, the problem they are solving, and, if the task ships a change, the smallest change you expect to meet it. Don't wait for confirmation. If the evidence rules out the change the user asked for, show it and stop. Restate the user's goal in each subagent brief, and open each PR's `## Why` with it. Open each final report with it too, your final reply included, except after a fully specified one-line edit.
-- Nontrivial change, architecture decision, or "are we sure?" → the `how` skill.
+- Code you can't map from a quick read, an architecture decision, or "are we sure?" → the `how` skill.
 - About to call `question` on a "which approach", "how should I", or "what should this do" fork → classify it before you ask. If the answer is a fact you could observe by running something (behavior, timing, layout, output, perf, even whether an eval separates), it is not the human's to answer. Sketch it via the Prototype playbook (load `prototype` with the `skill` tool) and let the result decide. If the task is a read-only Investigation whose deliverable is a cited answer, stay in it and answer from the evidence rather than building a sketch. Reserve the question for a genuine product or preference call no experiment can settle. Under `opencode run` no client answers `question`, so ask in plain text. Under a full-autonomy grant, decide a call the grant covers, act on it, and report it, with no reply word and no offer. Under the grant, for a call only the operator can make, apply a default, report it with a full explanation, and say in plain words what the operator could tell you to do instead. The operator answers in their own words. Never give a shorthand token to type back. Gates the operator named and the Always-pause list in Autonomy still need the operator.
 - Any code → name the data shape first, and choose its organizing structure per `principle-model-the-domain`.
-- Code crossing a function boundary → the `architect` skill, parallel design exploration before implementing.
+- A design with several credible shapes where the pick is costly to reverse (a public interface, a data model, cross-module wiring) → the `architect` skill, parallel design exploration before implementing.
 - Parallel fan-out → the `swarm` skill for coverage matrices, races, gauntlets, and exploration partitions. Use `arena` for design or code bakeoffs with base selection and grafting.
 - Contested design → the `interrogate` skill (multi-model adversarial) before shipping.
-- Nontrivial multi-step → write the throughput checkpoint (Feature step 3).
+- Work that splits across more than one worker → write the throughput checkpoint (Feature step 3).
 - Any prose surface, your reply to the user included → the `unslop` skill. Write the reply per **Writing the reply**. Agent-facing prose also follows the `skill-creator` or `writing-for-agents` skill when the catalog lists one.
 - Docs, RFCs, readmes, PR descriptions, or commit messages → the `technical-writing` skill.
 - Before every commit → the `deslop` skill.
@@ -119,7 +123,7 @@ Comments follow the same rule as the reply. Write them clean as you go. Keep a c
 
 ## Playbooks
 
-Open a todo list with `todowrite` whose first items are the matched playbook's steps, copied in verbatim, before any task-specific todos. Without `todowrite`, keep the list in your reply and update it at each phase. A step you choose not to do stays in the list with a one-line `skip: <reason>`. A task that needs no playbook records `no playbook: <reason>` as its first todo. A step that loads a skill is never skipped or done inline, because the skill is the step. Match the task to a playbook below and load it with the `skill` tool by its ID, the title in kebab case with hyphens kept and other punctuation dropped (Bug fix is `bug-fix`), unless the entry gives its ID. Then copy its steps in verbatim. A loaded playbook opens with "This is the `poteto-mode` <title> playbook." If the skill that loads lacks that line, another skill owns the ID, so read `playbooks/<id>.md` in this skill's folder instead.
+Open a todo list with `todowrite` whose first items are the matched playbook's steps, copied in verbatim, before any task-specific todos. Without `todowrite`, keep the list in your reply and update it at each phase. A step you choose not to do stays in the list with a one-line `skip: <reason>`, per **Size the task first**. A task that needs no playbook records `no playbook: <reason>` as its first todo. A step you do run that names a skill runs through that skill, not an inline imitation of it. Match the task to a playbook below and load it with the `skill` tool by its ID, the title in kebab case with hyphens kept and other punctuation dropped (Bug fix is `bug-fix`), unless the entry gives its ID. Then copy its steps in verbatim. A loaded playbook opens with "This is the `poteto-mode` <title> playbook." If the skill that loads lacks that line, another skill owns the ID, so read `playbooks/<id>.md` in this skill's folder instead.
 
 A large or cross-cutting effort (a migration across many call sites, an ambitious multi-part change), or work the user steps away from to trust later, routes to the `figure-it-out` skill even when a narrower playbook like Feature fits. Use `figure-it-out` whenever no bundled playbook fits. It designs a bespoke, rigorous playbook for the task. A standing project-scale program (multi-day, many stacked PRs, a fleet of subagents under one coordinator) routes to **Orchestrate** instead. `figure-it-out` designs one bespoke run, Orchestrate runs the program.
 

@@ -72,7 +72,7 @@ Only with an **explicit, written justification** that goes in the final Sources 
 - **No MCP is available for that category** in this environment. Flag it as a gap, not a choice: "Real-time team chat skipped. No matching MCP available, so the conversational record was not searchable."
 - **The source is provably irrelevant**, not just "probably irrelevant." A high bar: "Error / exception tracking skipped. Target is a build-time script with no runtime code path."
 
-If your scope assessment suggests a single-commit trivial target where the PR description already contains the complete answer, you may answer inline **only after** confirming all seven available category searches would be redundant. Say so explicitly. This should be rare.
+When `git log`, `git blame`, or the PR that introduced the target already answers the question, answer inline from it and name the source that settled it. Spawn the investigators when source control leaves the answer open.
 
 ## Step 4. Synthesize
 

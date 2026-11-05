@@ -4,7 +4,7 @@
 
 Investigation requests are read-only. They produce a cited explanation or a recommendation, not a code change.
 
-1. Load the `how` skill with the `skill` tool and run it. For motivation questions, also load the `why` skill with the `skill` tool and run it.
+1. For a question that spans a subsystem, load the `how` skill with the `skill` tool and run it. For a motivation question, load the `why` skill with the `skill` tool and run it. Answer a narrow question that one or two files settle by reading them yourself.
 2. Throughput checkpoint stays one line: `throughput checkpoint: n/a, read-only investigation`.
 3. Produce the `how`-shaped output (Overview / Key Concepts / How It Works / Where Things Live / Gotchas), or a recommendation with a tradeoffs table if the request is a decision between alternatives.
 4. Load the `unslop` skill with the `skill` tool and apply it to the reply.
