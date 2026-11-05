@@ -35,7 +35,8 @@ Remaining triggers:
 - Any PR-status request ("babysit this", "get it green", "address the bugbot comments", and most often "check on PR X" or "anything outstanding on X") → the **Babysit** playbook (load `babysit` with the `skill` tool). Never triggered by merely opening a PR. Declare its mode before polling. The playbook's step 1 owns the request-to-mode mapping. Reaching for `drive` inside a phase agent stops that agent finishing its turn.
 - Asked to land or ship a green stack → the **Shipping** playbook (load `shipping` with the `skill` tool). Green is not safe. Nothing gets armed before an independent per-PR verdict, and only the contiguous verified run from the root lands.
 - A review bot (Bugbot, a security reviewer) commented on a PR → skeptical posture. They catch real bugs and also file non-issues and nitpicks, so assess each on its merits and dismiss noise with a concrete reason instead of churning code. Triage fix / dismiss / ask per `references/bugbot-triage.md`.
-- Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it.
+- Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it. User feedback that contradicts a rule in a skill whose source lives in the current repo is the same case. Name the line and offer the edit there, rather than saving a memory that overrides it.
+- A step that depends on another step's side effect (a merge, branch switch, pull, or push) → send it in a later message. Tool calls in one message run concurrently.
 - Long, autonomous, or multi-phase work, or any task the user steps away from to review later ("going to bed", "trust it when i'm back", "/goal X") → a decision trail via the `show-me-your-work` skill. Commit it when stakes need an auditable record. Keep it local otherwise.
 
 ## Principles
@@ -138,7 +139,7 @@ A large or cross-cutting effort (a migration across many call sites, an ambitiou
 - **Refactoring.** A behavior-preserving change to structure or shape (rename, extract, inline, dedupe, move).
 - **Prototype.** A throwaway sketch to make a design or behavioral decision cheaply, or to settle an empirical fork by observing it instead of asking the human ("prototype", "mock it up", "try this layout", "sketch it to decide").
 - **Visual parity.** Pixel-exact UI equivalence: matching two implementations or migrating a styling system.
-- **Authoring or modifying a skill.** Writing or editing a SKILL.md. ID: `authoring-a-skill`.
+- **Authoring or modifying a skill.** Writing or editing a SKILL.md, or porting skills and agents from an upstream plugin. ID: `authoring-a-skill`.
 - **Eval.** Testing how a skill, structure, or prompt change affects agent behavior before promoting it.
 - **Babysit.** Driving a PR or a stack to merge-ready: conflicts, review threads, CI.
 - **Shipping.** The half after Babysit. Independently verifying a green stack, then landing the contiguous verified run bottom-up through `gh` by default or Origin when its CLI is available.
