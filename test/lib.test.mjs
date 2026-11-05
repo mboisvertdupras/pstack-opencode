@@ -105,7 +105,7 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
   mkdirSync(join(mode, "playbooks"), { recursive: true })
   mkdirSync(join(root, "skills", "babysit"))
   writeFileSync(join(mode, "SKILL.md"), "---\nname: poteto-mode\ndescription: Mode.\n---\n\n## Playbooks\n\n- **Bug fix.** A defect to fix.\n")
-  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "### Bug fix\n\n1. Load the `how` skill with the `skill` tool. See [the mode](../SKILL.md).\n")
+  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "---\nrequires: how, tdd\n---\n\n### Bug fix\n\n1. Load the `how` skill with the `skill` tool. See [the mode](../SKILL.md).\n")
   writeFileSync(join(mode, "playbooks", "untitled.md"), "### Untitled\n\n1. Do it.\n")
   writeFileSync(join(mode, "playbooks", "babysit.md"), "### Babysit\n\n1. Watch.\n")
   writeFileSync(join(root, "skills", "babysit", "SKILL.md"), "---\nname: babysit\ndescription: A user-facing babysit skill.\n---\n\nBody\n")
@@ -123,12 +123,14 @@ test("each playbook loads as a hidden skill under its stem, and a real skill wit
     content: undefined,
     autoinvoke: false,
     skills: ["how"],
+    requires: ["how", "tdd"],
   })
   assert.equal(
     bugFix.content,
     `This is the \`poteto-mode\` Bug fix playbook. Keep the todo list as the Playbooks section of the \`poteto-mode\` skill says, and when you run a step that names a skill, load that skill with the \`skill\` tool.\n\n### Bug fix\n\n1. Load the \`how\` skill with the \`skill\` tool. See [the mode](${mode}/SKILL.md).\n`,
   )
   assert.equal(byId.get("untitled")[0].description, "Untitled")
+  assert.deepEqual(byId.get("untitled")[0].requires, [])
   rmSync(root, { recursive: true, force: true })
 })
 
