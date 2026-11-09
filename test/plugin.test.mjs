@@ -304,6 +304,21 @@ test("a pstack delegate's subagent calls run in the foreground, so its report wa
   assert.equal(fromOther.input.background, true)
 })
 
+test("a pstack delegate cannot start a background shell job, because its parent takes its first turn end as the report", async () => {
+  const sessions = { root: { agent: "poteto-mode" }, child: { agent: "poteto-agent", parentID: "root" }, other: { agent: "general", parentID: "root" } }
+  const { ctx, state } = fakeContext({ sessions })
+  await plugin.setup(ctx)
+  const job = (sessionID, agent, input) => ({ tool: "shell", sessionID, agent, input: { command: "npm test", ...input } })
+  await assert.rejects(
+    async () => state.hooks["execute.before"](job("child", "poteto-agent", { background: true })),
+    /^Error: pstack: .*foreground with `timeout: 0`.*nohup <command> > <log> 2>&1 &/s,
+  )
+  await state.hooks["execute.before"](job("child", "poteto-agent", { background: false }))
+  await state.hooks["execute.before"](job("child", "poteto-agent", {}))
+  await state.hooks["execute.before"](job("root", "poteto-mode", { background: true }))
+  await state.hooks["execute.before"](job("other", "general", { background: true }))
+})
+
 test("a build session commits freely", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
