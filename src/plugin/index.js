@@ -8,9 +8,9 @@ import {
   MODELS_KEY,
   commandDescription,
   commandPrompt,
-  commitGate,
   entryOps,
-  isCommit,
+  gate,
+  isGated,
   isSkillEvent,
   modeEntry,
   modelsEntry,
@@ -159,14 +159,22 @@ export default {
       guarded("context", (event) => reconcile(event.sessionID, event.agent)),
     )
 
+    const pstackAgents = new Set(agents.map((agent) => agent.id))
+    const foreground = async (event) => {
+      if (event.tool !== "subagent") return
+      const caller = unwrap(await ctx.session.get({ sessionID: event.sessionID }))
+      if (caller?.parentID && pstackAgents.has(caller.agent)) event.input.background = false
+    }
+
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        if (isCommit(event)) blocked = commitGate(await sessionState(event.sessionID), event)
+        if (isGated(event)) blocked = gate(await sessionState(event.sessionID), event, catalog)
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }
       if (blocked) throw new Error(blocked)
+      await guarded("execute.before", foreground)(event)
     })
 
     await ctx.tool.hook(

@@ -38,4 +38,4 @@ Preconditions:
 - `pstack-models` also appears in `entries` once a recipe writes the model file. It is unrelated to the mode.
 - The skill is attached once per session, tracked in plugin storage. A second run on a fresh session attaches it again.
 - The `/poteto-mode` record also lives in plugin storage, so it survives a plugin restart. Use a fresh session to test `mode-other`.
-- The first-message prompt says not to do the task, so it never meets the gates. A prompt that edits in a poteto-mode session is held until a playbook loads. See [gates](./gates.md).
+- The first-message prompt says not to do the task, so it never meets the gates. A prompt that commits in a poteto-mode session, or delegates to `poteto-agent` after a playbook with `requires` loads, is held. See [gates](./gates.md).

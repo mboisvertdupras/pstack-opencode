@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { parseFrontmatter } from "../src/plugin/lib.js"
+import { parseFrontmatter, playbookRequires } from "../src/plugin/lib.js"
 
 const LINK = /\]\(([^)\s]+)\)/g
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i
@@ -63,13 +63,27 @@ function linkFindings(file, lines, exists) {
 
 const CATALOG_SKILLS = new Set(["browser", "skill-creator", "writing-for-agents"])
 
+const skillsRoot = (file) => file.match(/^(.*\/skills)\//)?.[1] ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "src", "skills")
+const isSkill = (root, id, exists) => CATALOG_SKILLS.has(id) || exists(join(root, id, "SKILL.md")) || exists(join(root, "poteto-mode", "playbooks", `${id}.md`))
+
 function skillIdFindings(file, lines, exists) {
-  const root = file.match(/^(.*\/skills)\//)?.[1] ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "src", "skills")
+  const root = skillsRoot(file)
   return lines.flatMap(({ markdown }, index) =>
     [...(markdown ?? "").matchAll(/the `([a-z0-9-]+)` skill\b/g)]
-      .filter(([, id]) => !CATALOG_SKILLS.has(id) && !exists(join(root, id, "SKILL.md")) && !exists(join(root, "poteto-mode", "playbooks", `${id}.md`)))
+      .filter(([, id]) => !isSkill(root, id, exists))
       .map(([match]) => ({ file, line: index + 1, rule: "skill-id", text: match })),
   )
+}
+
+function requiresFindings(file, text, exists) {
+  if (!/\/poteto-mode\/playbooks\/[^/]+\.md$/.test(file)) return []
+  const { data, body } = parseFrontmatter(text)
+  const root = skillsRoot(file)
+  return playbookRequires(data).flatMap((id) => {
+    if (!isSkill(root, id, exists)) return [`requires ${id}, which is not a skill`]
+    if (!body.includes(`the \`${id}\` skill`) && !body.includes(`**${id}**`)) return [`requires ${id}, which the playbook never names`]
+    return []
+  }).map((message) => ({ file, line: 1, rule: "frontmatter", text: message }))
 }
 
 export function lint(files, exists = existsSync) {
@@ -81,7 +95,7 @@ export function lint(files, exists = existsSync) {
       ),
     )
     const markdown = isMarkdown(file) ? [...linkFindings(file, lines, exists), ...skillIdFindings(file, lines, exists)] : []
-    return [...frontmatterFindings(file, text), ...matches, ...markdown]
+    return [...frontmatterFindings(file, text), ...requiresFindings(file, text, exists), ...matches, ...markdown]
   })
 }
 

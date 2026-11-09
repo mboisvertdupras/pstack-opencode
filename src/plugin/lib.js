@@ -5,8 +5,8 @@ export const MODE_AGENT = "poteto-mode"
 export const MODELS_KEY = "pstack-models"
 export const MODE_KEY = "pstack-mode"
 const MODE_AGENTS = [MODE_AGENT, "poteto-agent"]
-const COMMIT_GATE =
-  "pstack: load the `deslop` skill with the `skill` tool and follow it on the staged diff before you commit. Then rerun `git commit` as its own command, because this whole shell command was rejected and nothing in it ran."
+const DESLOP = "Load the `deslop` skill with the `skill` tool and follow it on the staged diff before you commit."
+const RERUN = "Then rerun `git commit` as its own command, because this whole shell command was rejected and nothing in it ran."
 
 const GIT_COMMIT = /(?:^|[;&|(\n])\s*git(?:\s+-\S+(?:\s+[^-\s;&|]\S*)?)*\s+commit(?=$|[\s;&|)])/
 
@@ -76,6 +76,12 @@ export function playbookSkills(body) {
   return [...new Set([...steps.matchAll(NAMED_SKILL)].map(([, id]) => id))]
 }
 
+export const playbookRequires = (data) =>
+  (data.requires ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+
 function readPlaybooks(modeDir) {
   const dir = join(modeDir, "playbooks")
   if (!existsSync(dir)) return []
@@ -86,7 +92,7 @@ function readPlaybooks(modeDir) {
     .map((name) => {
       const id = name.slice(0, -".md".length)
       const path = join(dir, name)
-      const { body } = parseFrontmatter(readFileSync(path, "utf8"))
+      const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
       const title = body.match(/^### (.+)$/m)?.[1] ?? id
       const frame = `This is the \`${MODE_AGENT}\` ${title} playbook. Keep the todo list as the Playbooks section of the \`${MODE_AGENT}\` skill says, and when you run a step that names a skill, load that skill with the \`skill\` tool.`
       return {
@@ -99,6 +105,7 @@ function readPlaybooks(modeDir) {
         content: `${frame}\n\n${absoluteLinks(body, dir)}`,
         autoinvoke: false,
         skills: playbookSkills(body),
+        requires: playbookRequires(data),
       }
     })
 }
@@ -175,10 +182,42 @@ export function modelsEntry(file, text) {
 
 export const isCommit = ({ tool, input }) => tool === "shell" && GIT_COMMIT.test(input.command)
 
-export function commitGate(session, event) {
-  if (!isCommit(event)) return undefined
-  if (session.loaded.includes("deslop") || !(session.mode || MODE_AGENTS.includes(event.agent))) return undefined
-  return COMMIT_GATE
+const isDelegation = ({ tool, input }) => tool === "subagent" && input.agent === "poteto-agent"
+
+export const isGated = (event) => isCommit(event) || isDelegation(event)
+
+const englishList = (ids) => {
+  const quoted = ids.map((id) => `\`${id}\``)
+  if (quoted.length < 3) return quoted.join(" and ")
+  return `${quoted.slice(0, -1).join(", ")}, and ${quoted.at(-1)}`
+}
+
+function unmetPlaybooks({ loaded }, catalog) {
+  return loaded
+    .map((id) => catalog.get(id))
+    .filter((skill) => skill?.kind === "playbook")
+    .map(({ title, requires }) => ({ title, missing: requires.filter((id) => !loaded.includes(id)) }))
+    .filter(({ missing }) => missing.length > 0)
+}
+
+export function gate(session, event, catalog) {
+  if (!isGated(event) || !(session.mode || MODE_AGENTS.includes(event.agent))) return undefined
+  const commit = isCommit(event)
+  const deslop = commit && !session.loaded.includes("deslop")
+  const playbooks = unmetPlaybooks(session, catalog)
+  if (playbooks.length === 0 && !deslop) return undefined
+  const one = playbooks.length === 1 && playbooks[0].missing.length === 1
+  const sentences = [
+    ...playbooks.map(
+      ({ title, missing }) =>
+        `The ${title} playbook always runs ${englishList(missing)} before the fix is delegated or committed, and this session has not loaded ${missing.length === 1 ? "it" : "them"}.`,
+    ),
+    ...(playbooks.length > 0 ? [`Load ${one ? "it" : "each"} with the \`skill\` tool and do what its step says${commit ? "." : ", then retry."}`] : []),
+    ...(deslop ? [DESLOP] : []),
+    ...(commit ? [RERUN] : []),
+  ]
+  const text = sentences.join(" ")
+  return `pstack: ${text[0].toLowerCase()}${text.slice(1)}`
 }
 
 const SKILL_FILE = /\/skills\/(?:poteto-mode\/playbooks\/([a-z0-9-]+)\.md|([a-z0-9-]+)\/SKILL\.md)$/

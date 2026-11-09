@@ -39,6 +39,6 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Slash commands](./slash-commands.md) covers `/<skill>` attaching its skill, principles and playbooks having no command, and the path fallback when a user skill shadows a pstack ID.
 - [poteto-mode agent](./poteto-mode-agent.md) covers the persistent mode, its instruction entry, switching away, and `/poteto-mode` keeping the mode on.
 - [Model roles](./model-roles.md) covers `pstack-models.md` reaching every session, following edits and deletion, the code-delegate ladder, and the cross-family pool.
-- [Subagents](./subagents.md) covers `poteto-agent` loading poteto-mode by ID, `comment-sicko` reporting without editing, and nested spawns.
-- [Gates](./gates.md) covers playbooks loading as skills and the `deslop` commit gate.
+- [Subagents](./subagents.md) covers `poteto-agent` loading poteto-mode by ID, `comment-sicko` reporting without editing, nested spawns, and delegates running their own subagents in the foreground.
+- [Gates](./gates.md) covers playbooks loading as skills, the `deslop` commit gate, and the hold on delegations and commits until a playbook's required skills load.
 - [Installer](./installer.md) covers linking, rerunning, retiring old agent links, refusing to overwrite, and uninstalling.

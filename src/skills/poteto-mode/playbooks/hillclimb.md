@@ -1,3 +1,7 @@
+---
+requires: how, principle-build-the-lever, benchmark-checklist, show-me-your-work
+---
+
 ### Hillclimb
 
 **You own the metric and the experiment's integrity. Supervise and review. Delegate the attempts.** For sustained, iterative improvement of one measurable thing against a target. A one-off fix is Bug fix or Perf issue. This is the loop.
