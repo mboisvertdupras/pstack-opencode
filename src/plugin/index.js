@@ -163,8 +163,9 @@ export default {
 
     const pstackAgents = new Set(agents.map((agent) => agent.id))
     const isDelegate = async (sessionID) => {
-      const caller = unwrap(await ctx.session.get({ sessionID }))
-      return Boolean(caller?.parentID && pstackAgents.has(caller.agent))
+      const session = unwrap(await ctx.session.get({ sessionID }))
+      if (!session?.parentID) return false
+      return pstackAgents.has(session.agent) || isDelegate(session.parentID)
     }
     const foreground = async (event) => {
       if (event.tool === "subagent" && (await isDelegate(event.sessionID))) event.input.background = false

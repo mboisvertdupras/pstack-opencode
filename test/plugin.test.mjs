@@ -319,6 +319,24 @@ test("a pstack delegate cannot start a background shell job, because its parent 
   await state.hooks["execute.before"](job("other", "general", { background: true }))
 })
 
+test("a session a pstack delegate spawned, at any depth, cannot start a background shell job either", async () => {
+  const sessions = {
+    root: { agent: "poteto-mode" },
+    delegate: { agent: "poteto-agent", parentID: "root" },
+    helper: { agent: "general", parentID: "delegate" },
+    deeper: { agent: "general", parentID: "helper" },
+    plain: { agent: "general", parentID: "root" },
+    plainer: { agent: "general", parentID: "plain" },
+  }
+  const { ctx, state } = fakeContext({ sessions })
+  await plugin.setup(ctx)
+  const job = (sessionID, agent) => ({ tool: "shell", sessionID, agent, input: { command: "npm test", background: true } })
+  for (const [sessionID, agent] of [["helper", "general"], ["deeper", "general"]]) {
+    await assert.rejects(async () => state.hooks["execute.before"](job(sessionID, agent)), /pstack: a subagent under a pstack delegate cannot start a background shell job/, sessionID)
+  }
+  for (const [sessionID, agent] of [["plain", "general"], ["plainer", "general"]]) await state.hooks["execute.before"](job(sessionID, agent))
+})
+
 test("a build session commits freely", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
