@@ -182,6 +182,15 @@ export function modelsEntry(file, text) {
 
 export const isCommit = ({ tool, input }) => tool === "shell" && GIT_COMMIT.test(input.command)
 
+export const isBackgroundShell = ({ tool, input }) => tool === "shell" && input.background === true
+
+export const DELEGATE_BACKGROUND_SHELL = [
+  "pstack: a delegate cannot start a background shell job.",
+  "Your parent takes your first turn end as your report, and the job's completion notice would reach only you, after that report.",
+  "Run a check whose result you need in the foreground with `timeout: 0`.",
+  "Start a server with `nohup <command> > <log> 2>&1 &` in a foreground call, and stop it before you report.",
+].join(" ")
+
 const isDelegation = ({ tool, input }) => tool === "subagent" && input.agent === "poteto-agent"
 
 export const isGated = (event) => isCommit(event) || isDelegation(event)
