@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  DELEGATE_BACKGROUND_SHELL,
   MODE_AGENT,
   MODE_KEY,
   MODELS_KEY,
@@ -10,6 +11,7 @@ import {
   commandPrompt,
   entryOps,
   gate,
+  isBackgroundShell,
   isGated,
   isSkillEvent,
   modeEntry,
@@ -160,16 +162,19 @@ export default {
     )
 
     const pstackAgents = new Set(agents.map((agent) => agent.id))
+    const isDelegate = async (sessionID) => {
+      const caller = unwrap(await ctx.session.get({ sessionID }))
+      return Boolean(caller?.parentID && pstackAgents.has(caller.agent))
+    }
     const foreground = async (event) => {
-      if (event.tool !== "subagent") return
-      const caller = unwrap(await ctx.session.get({ sessionID: event.sessionID }))
-      if (caller?.parentID && pstackAgents.has(caller.agent)) event.input.background = false
+      if (event.tool === "subagent" && (await isDelegate(event.sessionID))) event.input.background = false
     }
 
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
         if (isGated(event)) blocked = gate(await sessionState(event.sessionID), event, catalog)
+        if (!blocked && isBackgroundShell(event) && (await isDelegate(event.sessionID))) blocked = DELEGATE_BACKGROUND_SHELL
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }
