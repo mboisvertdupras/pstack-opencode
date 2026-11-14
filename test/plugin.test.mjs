@@ -526,3 +526,77 @@ test("a storage error during the gate lookup lets a commit through", async () =>
   }
   assert.equal(errors.length, 1)
 })
+
+const FABLE = { providerID: "claude-agent", id: "fable", variant: "medium" }
+const HAIKU = { providerID: "claude-agent", id: "haiku", variant: "medium" }
+const GPT = { providerID: "opencode", id: "gpt-6.1-sol", variant: "default" }
+
+const noCodeSetup = async (line, models = {}) => {
+  const modelsFile = join(mkdtempSync(join(tmpdir(), "pstack-")), "pstack-models.md")
+  writeFileSync(modelsFile, `# budget: medium (high)\nswarm workers: claude-agent/sonnet#medium\n${line}\n`)
+  const sessions = Object.fromEntries(Object.entries(models).map(([sessionID, model]) => [sessionID, { agent: "build", model }]))
+  const { ctx, state } = fakeContext({ modelsFile, sessions })
+  await plugin.setup(ctx)
+  const call = (tool, sessionID, input) => state.hooks["execute.before"]({ tool, sessionID, agent: "build", input })
+  return { call }
+}
+
+const NO_CODE_MESSAGE =
+  /^Error: pstack: this session runs claude-agent\/fable, which the `no code` line in pstack-models.md keeps out of source files\. Spawn a subagent on the first rung of the task's ladder with `model` set, so it does not inherit this model, give it the edit, then review and verify its diff\. Do not make the edit through the shell\.$/
+
+test("a model on the no code line cannot edit or write a source file", async () => {
+  const { call } = await noCodeSetup("no code: claude-agent/fable, opencode/gpt-6.1-sol", { s1: FABLE })
+  await assert.rejects(async () => call("edit", "s1", { path: "src/a.js", oldString: "a", newString: "b" }), NO_CODE_MESSAGE)
+  await assert.rejects(async () => call("write", "s1", { path: "app/X.php", content: "<?php" }), NO_CODE_MESSAGE)
+  await assert.rejects(async () => call("write", "s1", { path: "STYLE.CSS", content: "a{}" }), NO_CODE_MESSAGE)
+})
+
+test("a model on the no code line can still edit and write files that are not source code", async () => {
+  const { call } = await noCodeSetup("no code: claude-agent/fable", { s1: FABLE })
+  for (const path of ["README.md", "config.json", "ci.yaml", "Cargo.toml", "notes.txt", "data.tsv", "rows.csv", "Makefile", "Dockerfile"]) {
+    await call("write", "s1", { path, content: "x" })
+    await call("edit", "s1", { path, oldString: "x", newString: "y" })
+  }
+})
+
+test("a model missing from the no code line edits source files freely", async () => {
+  const { call } = await noCodeSetup("no code: claude-agent/fable", { s1: HAIKU })
+  await call("edit", "s1", { path: "src/a.js", oldString: "a", newString: "b" })
+  await call("write", "s1", { path: "app/X.php", content: "<?php" })
+})
+
+test("a #variant on the no code entry or on the session model does not change the match", async () => {
+  const { call } = await noCodeSetup("no code: claude-agent/fable#high , opencode/gpt-6.1-sol#xhigh", { s1: FABLE, s2: GPT })
+  await assert.rejects(async () => call("edit", "s1", { path: "src/a.js" }), NO_CODE_MESSAGE)
+  await assert.rejects(async () => call("write", "s2", { path: "src/a.js" }), /pstack: this session runs opencode\/gpt-6\.1-sol,/)
+})
+
+test("without a no code line, or with an empty one, no model is restricted", async () => {
+  for (const line of ["", "no code:", "no code:   "]) {
+    const { call } = await noCodeSetup(line, { s1: FABLE })
+    await call("edit", "s1", { path: "src/a.js", oldString: "a", newString: "b" })
+  }
+})
+
+test("a patch that touches a source file is rejected for a no code model, wherever the file sits in the patch", async () => {
+  const { call } = await noCodeSetup("no code: claude-agent/fable, opencode/gpt-6.1-sol", { s1: FABLE, s2: GPT })
+  const patch = (...lines) => ({ patchText: ["*** Begin Patch", ...lines, "*** End Patch", ""].join("\n") })
+  const rejected = [
+    patch("*** Update File: src/a.js", "@@", "+x"),
+    patch("*** Add File: notes.txt", "+hi", "*** Update File: lib/b.ts", "@@", "+x"),
+    patch("*** Add File: app/new.py", "+x"),
+    patch("*** Delete File: old.go"),
+    patch("*** Update File: notes.md", "*** Move to: src/renamed.rs", "@@", "+x"),
+  ]
+  for (const input of rejected) await assert.rejects(async () => call("patch", "s2", input), /pstack: this session runs opencode\/gpt-6\.1-sol,/, input.patchText)
+  await assert.rejects(async () => call("patch", "s1", rejected[0]), NO_CODE_MESSAGE)
+  await call("patch", "s2", patch("*** Add File: notes.txt", "+hi", "*** Update File: README.md", "@@", "+x"))
+  await call("patch", "s2", patch("*** Update File: docs/app.js.md", "@@", "+x"))
+})
+
+test("the no code rule ignores shell and read, and a session with no known model", async () => {
+  const { call } = await noCodeSetup("no code: claude-agent/fable", { s1: FABLE })
+  await call("shell", "s1", { command: "sed -i s/a/b/ src/a.js" })
+  await call("read", "s1", { path: "src/a.js" })
+  await call("edit", "unknown", { path: "src/a.js" })
+})
