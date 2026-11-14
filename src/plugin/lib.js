@@ -191,6 +191,16 @@ export const DELEGATE_BACKGROUND_SHELL = [
   "Start a server with `nohup <command> > <log> 2>&1 &` in a foreground call, and stop it before you report.",
 ].join(" ")
 
+const OPENCODE_RUN = /(?:^|[;&|(\n]|\$\()\s*(?:\w+=\S*\s+)*(?:(?:then|do|else|env|exec|nohup|nice|sudo|xargs|command|time|npx|bunx|timeout\s+\S+)\s+)*(?:[^\s;&|'"]*\/)?opencode\s+run\b/
+
+export const isOpencodeRun = ({ tool, input }) => tool === "shell" && OPENCODE_RUN.test(input.command)
+
+export const SUBAGENT_OPENCODE_RUN = [
+  "pstack: a subagent in a poteto-mode session cannot start a session with `opencode run`.",
+  "The session it creates has no parent, so nothing tracks it or receives its result.",
+  "Use the `subagent` tool to run the work as a child session, or, without that tool, ask your parent to run it in your report.",
+].join(" ")
+
 const isDelegation = ({ tool, input }) => tool === "subagent" && input.agent === "poteto-agent"
 
 export const isGated = (event) => isCommit(event) || isDelegation(event)

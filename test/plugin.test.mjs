@@ -337,6 +337,49 @@ test("a session a pstack delegate spawned, at any depth, cannot start a backgrou
   for (const [sessionID, agent] of [["plain", "general"], ["plainer", "general"]]) await state.hooks["execute.before"](job(sessionID, agent))
 })
 
+test("a subagent in a poteto-mode tree cannot start an untracked session with opencode run", async () => {
+  const sessions = {
+    root: { agent: "poteto-mode" },
+    reviewer: { agent: "general", parentID: "root" },
+    helper: { agent: "general", parentID: "reviewer" },
+    commanded: { agent: "build" },
+    commandedChild: { agent: "general", parentID: "commanded" },
+    plain: { agent: "build" },
+    delegate: { agent: "poteto-agent", parentID: "plain" },
+    delegateChild: { agent: "general", parentID: "delegate" },
+    plainChild: { agent: "general", parentID: "plain" },
+  }
+  const { ctx, state } = fakeContext({ sessions, storage: { "mode/commanded": true } })
+  await plugin.setup(ctx)
+  const run = (sessionID, command, background) => ({ tool: "shell", sessionID, agent: sessions[sessionID].agent, input: { command, background } })
+  const blocked = [
+    ["reviewer", "opencode run --model m --title t --auto 'review it'", true],
+    ["reviewer", "opencode run --help", false],
+    ["helper", "cd /tmp/x && opencode run 'reply OK'", false],
+    ["commandedChild", "/x/bin/opencode run 'reply OK'", false],
+    ["delegate", "FOO=1 nohup opencode run 'reply OK' > log 2>&1 &", false],
+    ["delegateChild", "opencode   run 'reply OK'", false],
+    ["reviewer", "if true; then opencode run 'reply OK'; fi", false],
+  ]
+  for (const [sessionID, command, background] of blocked) {
+    await assert.rejects(
+      async () => state.hooks["execute.before"](run(sessionID, command, background)),
+      /^Error: pstack: .*no parent, so nothing tracks it or receives its result.*`subagent` tool/s,
+      `${sessionID}: ${command}`,
+    )
+  }
+  const allowed = [
+    ["root", "opencode run 'reply OK'"],
+    ["plain", "opencode run 'reply OK'"],
+    ["plainChild", "opencode run 'reply OK'"],
+    ["reviewer", "node .opencode/skills/verify-pstack/scripts/harness.mjs run --agent poteto-mode 'hi'"],
+    ["reviewer", "git commit -m 'fix: reject opencode run from a subagent'"],
+    ["reviewer", "grep -n 'opencode run' README.md"],
+    ["reviewer", "opencode session list"],
+  ]
+  for (const [sessionID, command] of allowed) await state.hooks["execute.before"](run(sessionID, command, false))
+})
+
 test("a build session commits freely", async () => {
   const { ctx, state } = fakeContext()
   await plugin.setup(ctx)
