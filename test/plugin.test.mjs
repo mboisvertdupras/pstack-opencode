@@ -359,6 +359,7 @@ test("a subagent in a poteto-mode tree cannot start an untracked session with op
     ["commandedChild", "/x/bin/opencode run 'reply OK'", false],
     ["delegate", "FOO=1 nohup opencode run 'reply OK' > log 2>&1 &", false],
     ["delegateChild", "opencode   run 'reply OK'", false],
+    ["reviewer", "if true; then opencode run 'reply OK'; fi", false],
   ]
   for (const [sessionID, command, background] of blocked) {
     await assert.rejects(

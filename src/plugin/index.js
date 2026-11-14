@@ -7,12 +7,14 @@ import {
   MODE_AGENT,
   MODE_KEY,
   MODELS_KEY,
+  SUBAGENT_OPENCODE_RUN,
   commandDescription,
   commandPrompt,
   entryOps,
   gate,
   isBackgroundShell,
   isGated,
+  isOpencodeRun,
   isSkillEvent,
   modeEntry,
   modelsEntry,
@@ -162,10 +164,17 @@ export default {
     )
 
     const pstackAgents = new Set(agents.map((agent) => agent.id))
-    const isDelegate = async (sessionID) => {
+    const ancestry = async (sessionID) => {
       const session = unwrap(await ctx.session.get({ sessionID }))
-      if (!session?.parentID) return false
-      return pstackAgents.has(session.agent) || isDelegate(session.parentID)
+      if (!session?.parentID) return { subagents: [], root: { sessionID, agent: session?.agent } }
+      const { subagents, root } = await ancestry(session.parentID)
+      return { subagents: [session.agent, ...subagents], root }
+    }
+    const isDelegate = async (sessionID) => (await ancestry(sessionID)).subagents.some((agent) => pstackAgents.has(agent))
+    const isPotetoSubagent = async (sessionID) => {
+      const { subagents, root } = await ancestry(sessionID)
+      if (subagents.length === 0) return false
+      return subagents.some((agent) => pstackAgents.has(agent)) || root.agent === MODE_AGENT || commandedMode(root.sessionID)
     }
     const foreground = async (event) => {
       if (event.tool === "subagent" && (await isDelegate(event.sessionID))) event.input.background = false
@@ -176,6 +185,7 @@ export default {
       try {
         if (isGated(event)) blocked = gate(await sessionState(event.sessionID), event, catalog)
         if (!blocked && isBackgroundShell(event) && (await isDelegate(event.sessionID))) blocked = DELEGATE_BACKGROUND_SHELL
+        if (!blocked && isOpencodeRun(event) && (await isPotetoSubagent(event.sessionID))) blocked = SUBAGENT_OPENCODE_RUN
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }
