@@ -3,23 +3,20 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
-  DELEGATE_BACKGROUND_SHELL,
   MODE_AGENT,
   MODE_KEY,
   MODELS_KEY,
-  SUBAGENT_OPENCODE_RUN,
+  blockedBy,
   commandDescription,
   commandPrompt,
   entryOps,
-  gate,
-  isBackgroundShell,
-  isGated,
-  isOpencodeRun,
   isSkillEvent,
   modeEntry,
   modelsEntry,
+  noCodeModels,
   readAgents,
   readSkills,
+  toolRules,
   withEvent,
 } from "./lib.js"
 
@@ -36,7 +33,7 @@ export default {
     const modelsFile = ctx.options?.modelsFile ?? join(configDir, "pstack-models.md")
 
     let models = { mtimeMs: -1, text: undefined }
-    const readModels = () => {
+    const loadModels = () => {
       let stat
       try {
         stat = statSync(modelsFile)
@@ -44,8 +41,9 @@ export default {
         return undefined
       }
       if (stat.mtimeMs !== models.mtimeMs) models = { mtimeMs: stat.mtimeMs, text: readFileSync(modelsFile, "utf8").trim() }
-      return modelsEntry(modelsFile, models.text)
+      return models.text
     }
+    const readModels = () => modelsEntry(modelsFile, loadModels())
 
     const modeKey = (sessionID) => `mode/${sessionID}`
     const commandedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
@@ -180,12 +178,17 @@ export default {
       if (event.tool === "subagent" && (await isDelegate(event.sessionID))) event.input.background = false
     }
 
+    const restrictedModel = async (sessionID) => {
+      const { providerID, id } = unwrap(await ctx.session.get({ sessionID }))?.model ?? {}
+      const model = `${providerID}/${id}`
+      return noCodeModels(loadModels()).has(model) ? model : undefined
+    }
+    const rules = toolRules({ catalog, sessionState, isDelegate, isPotetoSubagent, restrictedModel })
+
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
       try {
-        if (isGated(event)) blocked = gate(await sessionState(event.sessionID), event, catalog)
-        if (!blocked && isBackgroundShell(event) && (await isDelegate(event.sessionID))) blocked = DELEGATE_BACKGROUND_SHELL
-        if (!blocked && isOpencodeRun(event) && (await isPotetoSubagent(event.sessionID))) blocked = SUBAGENT_OPENCODE_RUN
+        blocked = await blockedBy(rules, event)
       } catch (error) {
         console.error("pstack: execute.before hook failed", error)
       }
