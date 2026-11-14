@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { commandDescription, commandPrompt, entryOps, loadedSkill, parseFrontmatter, playbookDescriptions, playbookSkills, readAgents, readSkills, withEvent } from "../src/plugin/lib.js"
+import { commandDescription, commandPrompt, entryOps, loadedSkill, modeEntry, parseFrontmatter, playbookDescriptions, playbookSkills, readAgents, readSkills, withEvent } from "../src/plugin/lib.js"
 
 test("frontmatter reads double-quoted, single-quoted, plain, and folded descriptions", () => {
   const quoted = parseFrontmatter('---\nname: how\ndescription: "Use for \\"how does X work\\"."\ndisable-model-invocation: true\n---\n\n# How\n')
@@ -42,6 +42,25 @@ test("entry ops put changed values and remove values that are no longer wanted",
     { key: "c", value: "3" },
   ])
   assert.deepEqual(entryOps({ a: undefined }, {}), [])
+})
+
+test("the mode entry's skills fingerprint changes when a served skill or playbook changes, and asks the root to reload poteto-mode", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "pstack-skills-")))
+  const mode = join(root, "skills", "poteto-mode")
+  mkdirSync(join(mode, "playbooks"), { recursive: true })
+  mkdirSync(join(root, "skills", "deslop"))
+  writeFileSync(join(mode, "SKILL.md"), "---\nname: poteto-mode\ndescription: Mode.\n---\n\n## Playbooks\n\n- **Bug fix.** A defect to fix.\n")
+  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "### Bug fix\n\n1. Reproduce.\n")
+  writeFileSync(join(root, "skills", "deslop", "SKILL.md"), "---\nname: deslop\ndescription: Deslop.\n---\n\nRemove slop.\n")
+  const entry = () => modeEntry(root, readSkills(join(root, "skills")))
+  const first = entry()
+  assert.equal(entry(), first)
+  assert.match(first, / pstack skills fingerprint: `[0-9a-f]{12}`\. When this fingerprint changes during a session, load `poteto-mode` again with the `skill` tool and reread the playbook you are running\.$/)
+  writeFileSync(join(mode, "playbooks", "bug-fix.md"), "### Bug fix\n\n1. Reproduce it yourself.\n")
+  const afterPlaybook = entry()
+  assert.notEqual(afterPlaybook, first)
+  writeFileSync(join(root, "skills", "deslop", "SKILL.md"), "---\nname: deslop\ndescription: Deslop.\n---\n\nRemove all slop.\n")
+  assert.notEqual(entry(), afterPlaybook)
 })
 
 test("skill content links to files on disk by absolute path, and leaves URLs, anchors, and missing targets alone", () => {
