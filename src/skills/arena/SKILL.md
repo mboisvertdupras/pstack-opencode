@@ -35,7 +35,7 @@ Pick the base a future maintainer can extend most easily without breaking invari
 
 ## Phase E: Graft
 
-Walk each losing candidate once more for what is worth porting into the base, usually one or two things per candidate, not most of it. Fold each graft in by hand, per the `principle-redesign-from-first-principles` skill, so the result stays coherent under one mental model. Don't paste mechanically.
+Walk each losing candidate once more for what is worth porting into the base, usually one or two things per candidate, not most of it. Fold each graft in by hand, per the `principle-redesign-from-first-principles` skill, so the result stays coherent under one mental model. Don't paste mechanically. If your model is on the `no code` line, brief each code graft to an implementer per the Subagents section of the `poteto-mode` skill.
 
 If the candidates converge on one shape, that is strong agreement. Note it and ship the consensus shape. No graft is needed. If they wildly diverge, Phase A was under-specified. Reframe and re-run rather than averaging the divergence.
 
