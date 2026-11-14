@@ -72,10 +72,11 @@ export default {
         if (after !== before) await ctx.storage.set(skillsKey(sessionID), after)
       })
 
+    const potetoMode = modeEntry(ROOT, skills)
     const synced = new Map()
     const reconcileNow = async (sessionID, agent) => {
       const mode = agent === MODE_AGENT || (await commandedMode(sessionID))
-      const want = { [MODELS_KEY]: readModels(), [MODE_KEY]: mode ? modeEntry(ROOT) : undefined }
+      const want = { [MODELS_KEY]: readModels(), [MODE_KEY]: mode ? potetoMode : undefined }
       let have = synced.get(sessionID)
       if (!have) {
         const entries = unwrap(await ctx.session.instructions.entry.list({ sessionID })) ?? []
