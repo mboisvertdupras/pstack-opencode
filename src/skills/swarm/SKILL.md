@@ -24,7 +24,9 @@ Open a todo list with `todowrite` with one entry per phase before launching anyt
 
 ## Phase B: Fan out
 
-Give each worker a git worktree. Create it with `tools.opencode.worktree_create({ name })` inside `execute`, put the returned `directory` in the brief, and name the branch or commit it checks out. The worker runs every command there. Spawn all N workers in one message with `agent: "general"`, `background: true`, and the step 3 model, left unset for `auto` or `inherit-parent`.
+Give each worker its own git worktree, read-only workers included. Create it with `tools.opencode.worktree_create({ name })` inside `execute`, put the returned `directory` in the brief, and name the branch or commit it checks out. The worker runs every command there. Never point a worker at the user's checkout.
+
+Spawn workers with `agent: "general"`, `background: true`, and the step 3 model, left unset for `auto` or `inherit-parent`. When the workers share a boot step that no one has run from a fresh worktree yet, such as a launch script, spawn one worker first. Its brief says to report right after boot. If it reports `BLOCKED`, fix the boot step before you spawn more. Once it boots, continue it through its `sessionID` with its slice and spawn the rest in one message. Otherwise spawn all N workers in one message.
 
 When a worker must start from a non-default branch `<b>`, its brief says to run `git switch -c <work-branch> <b>` in the worktree first.
 
