@@ -10,7 +10,7 @@ Adversaries try to break a change or a design. A finding survives only when a ru
 
 ## Frame
 
-The scope is what the user names. Otherwise it is the branch diff from its merge base with the base branch, through the working tree. Load the `in-your-own-words` skill with the `skill` tool and state the intent with it, from the user's message, the commits, and the PR description. Ask the user when the intent is unclear.
+The scope is what the user names. Otherwise it is the branch diff from its merge base with the base branch, through the working tree. Load the `in-your-own-words` skill with the `skill` tool and state the intent with it. Take the intent from the scope's planned purpose, in its plan section or PR description, and from the user's message and the commits. Keep the intent to the paths the scope owns. Ask the user when the intent is unclear.
 
 ## Fan out
 
@@ -20,12 +20,12 @@ Load the `arena` skill and run its Phase A steps 3 and 4 and Phase B, with four 
 
 ## Verify
 
-Verify each finding per arena Phase F by rerunning its command. Keep a finding when the output shows the failure and the failure breaks the intent. Drop the rest. Merge findings that share a root cause.
+Verify each finding per arena Phase F by rerunning its command. Keep a finding when the output shows the failure, the failure breaks the intent, and a caller at the scope's head can reach it. A finding that only a later change could reach goes under Dropped, with that change named. Drop the rest. Merge findings that share a root cause.
 
 Skip arena Phases C, D, and E. Adversaries find different failures, so the verdict keeps every verified finding, not one adversary's list.
 
 ## Output
 
 - **Intent**: the restatement.
-- **Findings**: for each verified finding, the command, its output, how it breaks the intent, and the adversaries that found it. Say "no verified findings" when none survive.
-- **Dropped**: for each adversary, the count of dropped findings and why.
+- **Findings**: for each verified finding, the command, its output, how it breaks the intent, the caller that reaches it at the head, and the adversaries that found it. Say "no verified findings" when none survive.
+- **Dropped**: for each adversary, the count of dropped findings and why. List each unreachable finding with the later change that would reach it.
