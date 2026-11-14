@@ -219,6 +219,24 @@ test("the /setup-pstack model file becomes a session entry and follows edits and
   assert.equal(state.entries.s1["pstack-models"], undefined)
 })
 
+const NOT_A_ROLE =
+  "The `no code` line is not a role. Models on it never edit source files. They plan, hand each edit to a subagent on a smaller model, and verify, per the Subagents section of the `poteto-mode` skill."
+
+test("the models entry says the no code line is not a role only when the line names a model", async () => {
+  const modelsFile = join(mkdtempSync(join(tmpdir(), "pstack-")), "pstack-models.md")
+  const { ctx, state } = fakeContext({ modelsFile })
+  await plugin.setup(ctx)
+  const header = async (text) => {
+    writeFileSync(modelsFile, text)
+    await state.hooks.context({ sessionID: "s1", agent: "build" })
+    return state.entries.s1["pstack-models"].split("\n\n")[0]
+  }
+  assert.ok((await header("bug-fix: claude-agent/opus#medium\nno code: claude-agent/fable\n")).endsWith(` in pstack skills. ${NOT_A_ROLE}`))
+  for (const text of ["bug-fix: claude-agent/opus#medium\n", "bug-fix: claude-agent/opus#medium\nno code:\n"]) {
+    assert.ok((await header(text)).endsWith("Each role line overrides that role's default model in pstack skills."), text)
+  }
+})
+
 test("a failing OpenCode call never breaks the user's prompt", async () => {
   const { ctx, state } = fakeContext()
   ctx.session.get = async () => {
