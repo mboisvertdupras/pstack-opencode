@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { dirname, join, resolve } from "node:path"
+import { dirname, extname, join, resolve } from "node:path"
 
 export const MODE_AGENT = "poteto-mode"
 export const MODELS_KEY = "pstack-models"
@@ -204,6 +204,47 @@ export const SUBAGENT_OPENCODE_RUN = [
 const isDelegation = ({ tool, input }) => tool === "subagent" && input.agent === "poteto-agent"
 
 export const isGated = (event) => isCommit(event) || isDelegation(event)
+
+const SOURCE_EXTENSIONS = new Set(
+  "js mjs cjs ts mts cts tsx jsx vue svelte php py rb go rs java kt swift c h cc cpp hpp cs m scala sh bash zsh sql css scss sass less html".split(" "),
+)
+const PATCH_TARGET = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm
+
+const editTargets = ({ tool, input }) => {
+  if (tool === "edit" || tool === "write") return input.path ? [input.path] : []
+  if (tool === "patch") return [...(input.patchText ?? "").matchAll(PATCH_TARGET)].map(([, path]) => path.trim())
+  return []
+}
+
+const isSourceFile = (path) => SOURCE_EXTENSIONS.has(extname(path).slice(1).toLowerCase())
+
+export const editsSource = (event) => editTargets(event).some(isSourceFile)
+
+export function noCodeModels(text) {
+  const line = text?.match(/^no code:(.*)$/m)?.[1] ?? ""
+  return new Set(line.split(",").map((entry) => entry.replace(/#.*/, "").trim()).filter(Boolean))
+}
+
+export const noCodeMessage = (model) =>
+  `pstack: this session runs ${model}, which the \`no code\` line in pstack-models.md keeps out of source files. Spawn a subagent on the first rung of the task's ladder with \`model\` set, so it does not inherit this model, give it the edit, then review and verify its diff. Do not make the edit through the shell.`
+
+export const toolRules = ({ catalog, sessionState, isDelegate, isPotetoSubagent, restrictedModel }) => [
+  { match: isGated, scope: (event) => sessionState(event.sessionID), message: (state, event) => gate(state, event, catalog) },
+  { match: isBackgroundShell, scope: (event) => isDelegate(event.sessionID), message: () => DELEGATE_BACKGROUND_SHELL },
+  { match: isOpencodeRun, scope: (event) => isPotetoSubagent(event.sessionID), message: () => SUBAGENT_OPENCODE_RUN },
+  { match: editsSource, scope: (event) => restrictedModel(event.sessionID), message: noCodeMessage },
+]
+
+export async function blockedBy(rules, event) {
+  for (const { match, scope, message } of rules) {
+    if (!match(event)) continue
+    const hit = await scope(event)
+    if (!hit) continue
+    const text = message(hit, event)
+    if (text) return text
+  }
+  return undefined
+}
 
 const englishList = (ids) => {
   const quoted = ids.map((id) => `\`${id}\``)
