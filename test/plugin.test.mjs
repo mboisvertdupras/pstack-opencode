@@ -194,6 +194,32 @@ test("the poteto-mode agent gets the mode entry and the skill on its first messa
   assert.equal(state.entries.s1["pstack-mode"], undefined)
 })
 
+test("after a plugin reload the mode entry is put once when the stored value is stale, and not at all when it is current", async () => {
+  const sessions = { s1: { agent: "poteto-mode" } }
+  const first = fakeContext({ sessions })
+  await plugin.setup(first.ctx)
+  await first.state.hooks.prompt({ sessionID: "s1", prompt: { text: "fix the drift" } })
+  const current = first.state.entries.s1["pstack-mode"]
+  assert.match(current, /pstack skills fingerprint: `[0-9a-f]{12}`/)
+
+  const reload = async (stored) => {
+    const { ctx, state } = fakeContext({ sessions, storage: first.state.storage })
+    state.entries.s1 = { "pstack-mode": stored }
+    const puts = []
+    const put = ctx.session.instructions.entry.put
+    ctx.session.instructions.entry.put = async (input) => {
+      puts.push(input)
+      await put(input)
+    }
+    await plugin.setup(ctx)
+    await state.hooks.prompt({ sessionID: "s1", prompt: { text: "and the tests" } })
+    await state.hooks.context({ sessionID: "s1", agent: "poteto-mode" })
+    return puts
+  }
+  assert.deepEqual(await reload(current), [])
+  assert.deepEqual(await reload(current.replace(/`[0-9a-f]{12}`/, "`000000000000`")), [{ sessionID: "s1", key: "pstack-mode", value: current }])
+})
+
 test("other agents get neither the mode entry nor the skill", async () => {
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } } })
   await plugin.setup(ctx)

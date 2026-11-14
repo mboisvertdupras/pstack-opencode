@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, extname, join, resolve } from "node:path"
 
@@ -167,11 +168,19 @@ export function commandPrompt(skill, text, shadowedBy) {
   }
 }
 
-export function modeEntry(root) {
+function skillsFingerprint(skills) {
+  const hash = createHash("sha256")
+  for (const { id, content } of skills.toSorted((a, b) => a.id.localeCompare(b.id))) hash.update(`${id}\0${content}\0`)
+  return hash.digest("hex").slice(0, 12)
+}
+
+export function modeEntry(root, skills) {
   return [
     "poteto mode is on. The user turned it on, so every task in this session follows the `poteto-mode` skill.",
     `If the skill's instructions are not in this conversation, at the start or after compaction, load it with the \`skill\` tool (ID \`poteto-mode\`, file \`${join(root, "skills", "poteto-mode", "SKILL.md")}\`) before you act.`,
     'When the user says "new task", match a fresh playbook.',
+    `pstack skills fingerprint: \`${skillsFingerprint(skills)}\`.`,
+    "When this fingerprint changes during a session, load `poteto-mode` again with the `skill` tool and reread the playbook you are running.",
   ].join(" ")
 }
 
