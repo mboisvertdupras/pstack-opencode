@@ -175,9 +175,16 @@ export function modeEntry(root) {
   ].join(" ")
 }
 
+const NOT_A_ROLE =
+  "The `no code` line is not a role. Models on it never edit source files. They plan, hand each edit to a subagent on a smaller model, and verify, per the Subagents section of the `poteto-mode` skill."
+
 export function modelsEntry(file, text) {
   if (!text) return undefined
-  return `pstack per-role model choices, written by /setup-pstack to \`${file}\`. Each role line overrides that role's default model in pstack skills.\n\n${text}`
+  const header = [
+    `pstack per-role model choices, written by /setup-pstack to \`${file}\`. Each role line overrides that role's default model in pstack skills.`,
+    ...(noCodeModels(text).size > 0 ? [NOT_A_ROLE] : []),
+  ].join(" ")
+  return `${header}\n\n${text}`
 }
 
 export const isCommit = ({ tool, input }) => tool === "shell" && GIT_COMMIT.test(input.command)
