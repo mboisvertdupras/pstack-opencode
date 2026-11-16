@@ -21,7 +21,7 @@ const spawnAgent = (id) => ({ type: "assistant", parent_tool_use_id: null, messa
 
 const bugStream = [
   init,
-  use("Skill", { skill: "pstack:how" }),
+  use("Skill", { skill: "pstack:why" }),
   use("Read", { file_path: `${PIN}/skills/poteto-mode/playbooks/bug-fix.md` }),
   use("TaskCreate", { subject: "Reproduce it yourself", description: "on the matching surface via the driver skill" }),
   use("TaskCreate", { subject: "Root-cause it" }),
@@ -37,7 +37,7 @@ test("the adapter strips the pstack skill prefix and counts a playbook read unde
   assert.deepEqual([checks.playbook.pass, checks.playbook.picked], [true, "bug-fix"])
   const { skills } = score("matrix:why@cc-slash", tree).checks
   assert.equal(skills.pass, true)
-  assert.match(skills.detail, /^how loaded before/)
+  assert.match(skills.detail, /^why loaded before/)
 })
 
 test("a run of TaskCreate calls is one todo list that carries the playbook's step 1", () => {
