@@ -52,8 +52,6 @@ judgment and prose: <provider>/claude-opus-5-5#xhigh
 hardest tasks: <provider>/claude-opus-5-5#xhigh
 how explorer: <provider>/grok-4.7#xhigh
 how explainer: <provider>/claude-opus-5-5#xhigh
-why investigators: <provider>/grok-4.7#xhigh
-why synthesizer: <provider>/claude-opus-5-5#xhigh
 reflect tooling: <provider>/grok-4.7#xhigh
 reflect judgment, divergent, synthesizer: <provider>/claude-opus-5-5#xhigh
 arena runners: <provider>/claude-opus-5-5#xhigh, <provider>/grok-4.7#xhigh
