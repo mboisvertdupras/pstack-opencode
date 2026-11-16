@@ -28,7 +28,7 @@ Skip Phase A only when the work is genuinely greenfield with no surrounding syst
 
 Load the `arena` skill and run it with the design-sketch task and the Phase A grounding artifacts. Pass `references/runner-prompt.md` as each runner's prompt.
 
-Take the runners from the `architect runners` line in the `pstack-models` instruction entry, in place of the `arena runners` line. If the entry or that line is missing, use `<provider>/claude-opus-5-5#xhigh` and `<provider>/grok-4.7#xhigh`, from a provider that lists each. Alias and rejected entries follow the runner rules in the `arena` skill's Phase A.
+Take the runners from the `architect runners` line in the `pstack-models` instruction entry, in place of the `arena runners` line. If the entry or that line is missing, use `<provider>/claude-fable-5-2#high`, `<provider>/claude-opus-5-5#high`, and `<provider>/gemini-4-carbon#high`, from a provider that lists each. Alias and rejected entries follow the runner rules in the `arena` skill's Phase A.
 
 Design it twice. Require at least two structurally distinct candidates before synthesis, even when the first looks sufficient. This is the `principle-exhaust-the-design-space` skill made concrete. Whole-shape alternatives, not point fixes inside one shape.
 

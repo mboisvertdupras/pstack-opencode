@@ -1,3 +1,4 @@
+# defaults: 2
 feature, refactoring: inherit-parent
 bug-fix: inherit-parent
 perf-issue: inherit-parent
