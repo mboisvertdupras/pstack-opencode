@@ -30,7 +30,7 @@ Each reviewer and the synthesizer name a role line in the `pstack-models` instru
 | Lens | Role line | Default `model` | Prompt template |
 |---|---|---|---|
 | Judgment | `reflect judgment, divergent, synthesizer` | `<provider>/claude-opus-5-5#xhigh` | `references/judgment-reviewer.md` |
-| Tooling | `reflect tooling` | `<provider>/grok-4.7#xhigh` | `references/tooling-reviewer.md` |
+| Tooling | `reflect tooling` | `<provider>/claude-opus-5-5#high` | `references/tooling-reviewer.md` |
 | Divergent | `reflect judgment, divergent, synthesizer` | `<provider>/claude-opus-5-5#xhigh` | `references/divergent-reviewer.md` |
 
 Pass each template verbatim, substituting the exported session path or digest where marked. Reviewers return findings in the `subagent` response body.
