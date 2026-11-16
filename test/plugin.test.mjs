@@ -305,10 +305,10 @@ test("after Perf issue loads, a poteto-agent delegation waits for the skills its
   await plugin.setup(ctx)
   await state.hooks["execute.after"](loaded("s1", "poteto-mode", "perf-issue"))
   const fix = spawn("s1", "poteto-mode", { agent: "poteto-agent" })
-  await assert.rejects(async () => state.hooks["execute.before"](fix), /Perf issue.*`benchmark-checklist`, `how`, and `principle-sequence-verifiable-units`/s)
+  await assert.rejects(async () => state.hooks["execute.before"](fix), /Perf issue.*`benchmark-checklist` and `principle-sequence-verifiable-units`/s)
   await state.hooks["execute.before"](spawn("s1", "poteto-mode", { agent: "explore" }))
 
-  for (const id of ["benchmark-checklist", "how"]) await state.hooks["execute.after"](loaded("s1", "poteto-mode", id))
+  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "benchmark-checklist"))
   await assert.rejects(async () => state.hooks["execute.before"](fix), /`principle-sequence-verifiable-units`/)
   await state.hooks["execute.after"](loaded("s1", "poteto-mode", "principle-sequence-verifiable-units"))
   await state.hooks["execute.before"](fix)

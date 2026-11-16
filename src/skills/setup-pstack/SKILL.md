@@ -17,7 +17,7 @@ Map each default family to a detected model by its `id` or `name`. `claude-opus-
 
 ### 2. Load current state
 
-The default role-to-model mapping is the file shape shown in step 5 below, with `<provider>/` filled in from step 1. If `~/.config/opencode/pstack-models.md` already exists, read it and treat its `# budget` line and its role values as the current choices. Otherwise start from those defaults. A line whose role is not in step 5, such as `how critics`, is from a retired role. Drop it.
+The default role-to-model mapping is the file shape shown in step 5 below, with `<provider>/` filled in from step 1. If `~/.config/opencode/pstack-models.md` already exists, read it and treat its `# budget` line and its role values as the current choices. Otherwise start from those defaults. A line whose role is not in step 5, such as `how explorer` or `why investigators`, is from a retired role. Drop it.
 
 ### 3. Budget, map, and confirm
 
@@ -50,8 +50,6 @@ perf-issue: <provider>/grok-4.7#xhigh
 hillclimb: <provider>/grok-4.7#xhigh
 judgment and prose: <provider>/claude-opus-5-5#xhigh
 hardest tasks: <provider>/claude-opus-5-5#xhigh
-how explorer: <provider>/grok-4.7#xhigh
-how explainer: <provider>/claude-opus-5-5#xhigh
 reflect tooling: <provider>/grok-4.7#xhigh
 reflect judgment, divergent, synthesizer: <provider>/claude-opus-5-5#xhigh
 arena runners: <provider>/claude-opus-5-5#xhigh, <provider>/grok-4.7#xhigh

@@ -17,7 +17,6 @@ const SMALL_FEATURE_PROMPT = `Add an exported \`isZero(amount)\` helper to src/m
 
 const spawns = (agent) => ({ tool, input }) => tool === "subagent" && input.agent === agent
 const RAN = {
-  how: spawns("explore"),
   architect: spawns("explore"),
   arena: spawns("explore"),
   interrogate: spawns("general"),
@@ -123,7 +122,6 @@ const parentLoads = (id) => ({ parent }) => {
 }
 
 export const checks = {
-  how_before_code: loadedBeforeCode(["how"]),
   architect_before_code: loadedBeforeCode(["architect", "arena"]),
 
   delegated({ children }) {
@@ -155,7 +153,6 @@ export const checks = {
   },
 
   unslop_parent: parentLoads("unslop"),
-  how_loaded: parentLoads("how"),
 
   committed({ sessions }) {
     const commits = sessions.flatMap((session) => session.events).filter((event) => event.commit).length
@@ -221,7 +218,7 @@ export const checks = {
   },
 }
 
-const FEATURE_CHECKS = ["how_before_code", "architect_before_code", "delegated", "deslop_before_commit", "no_comments_before_commit", "unslop_parent"]
+const FEATURE_CHECKS = ["architect_before_code", "delegated", "deslop_before_commit", "no_comments_before_commit", "unslop_parent"]
 const MINUTE = 60_000
 
 export const MATRIX_CASES = [
@@ -242,11 +239,11 @@ export const MATRIX_CASES = [
   },
   { id: "feature", prompt: FEATURE_PROMPT, expect: { playbook: "feature", skills: ["principle-model-the-domain"] } },
   { id: "small-feature", prompt: SMALL_FEATURE_PROMPT, expect: { playbook: "feature", avoid: ["architect", "arena", "interrogate"] } },
-  { id: "how", prompt: INVESTIGATE_PROMPT, expect: { playbook: "investigation", skills: ["how"] } },
+  { id: "how", prompt: INVESTIGATE_PROMPT, expect: { playbook: "investigation" } },
   {
     id: "why",
     prompt: "Why does billing round tax per line instead of on the invoice total, and should it? Cite the code. Answer without asking questions.",
-    expect: { playbook: "investigation", skills: ["why", "how"] },
+    expect: { playbook: "investigation", skills: ["why"] },
   },
   {
     id: "plan",
@@ -276,7 +273,7 @@ const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []),
 export const scenarios = {
   "feature-agent": { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
   "feature-slash": { role: "metric", runtime: "opencode", drive: { via: "command", command: "poteto-mode", agent: "build" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
-  investigate: { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: INVESTIGATE_PROMPT, timeoutMs: 20 * MINUTE, checks: ["how_loaded", "unslop_parent"] },
+  investigate: { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: INVESTIGATE_PROMPT, timeoutMs: 20 * MINUTE, checks: ["unslop_parent"] },
   "plain-build": { role: "gate", runtime: "opencode", drive: { via: "run", agent: "build" }, prompt: PLAIN_PROMPT, timeoutMs: 10 * MINUTE, checks: ["committed", "no_mode_entry", "no_hidden_skill"] },
   ...Object.fromEntries(
     MATRIX_CASES.flatMap(({ id, prompt, expect }) =>

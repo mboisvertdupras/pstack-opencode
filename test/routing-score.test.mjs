@@ -28,16 +28,15 @@ function session(agent, parts, { skills = [], entries } = {}) {
 const tree = (parent, ...children) => ({ parent, children })
 const check = (scenario, t, name) => score(scenario, t).checks[name]
 
-test("how_before_code passes only when how loads before the first poteto-agent delegation", () => {
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [skill("how"), delegate()])), "how_before_code").pass, true)
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [delegate(), skill("how")])), "how_before_code").pass, false)
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [read(), delegate()])), "how_before_code").pass, false)
+test("architect_before_code passes only when architect loads before the first poteto-agent delegation", () => {
+  assert.equal(check("feature-agent", tree(session("poteto-mode", [delegate(), skill("architect")])), "architect_before_code").pass, false)
+  assert.equal(check("feature-agent", tree(session("poteto-mode", [read(), delegate()])), "architect_before_code").pass, false)
 })
 
-test("how_before_code anchors on the parent's first edit when it never delegates", () => {
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [edit(), skill("how"), edit()])), "how_before_code").pass, false)
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [skill("how"), edit()])), "how_before_code").pass, true)
-  assert.equal(check("feature-agent", tree(session("poteto-mode", [delegate("explore"), skill("how"), edit()])), "how_before_code").pass, true)
+test("architect_before_code anchors on the parent's first edit when it never delegates", () => {
+  assert.equal(check("feature-agent", tree(session("poteto-mode", [edit(), skill("architect"), edit()])), "architect_before_code").pass, false)
+  assert.equal(check("feature-agent", tree(session("poteto-mode", [skill("architect"), edit()])), "architect_before_code").pass, true)
+  assert.equal(check("feature-agent", tree(session("poteto-mode", [delegate("explore"), skill("architect"), edit()])), "architect_before_code").pass, true)
 })
 
 test("architect_before_code accepts architect or arena and ignores a child's load", () => {
@@ -100,12 +99,10 @@ test("no_comments_before_commit orders across sessions by time and fails with no
   assert.equal(check("feature-agent", tree(session("poteto-mode", [skill("no-comments")])), "no_comments_before_commit").pass, false)
 })
 
-test("unslop_parent and how_loaded count only the parent's loads", () => {
-  const childOnly = tree(session("poteto-mode", [delegate()]), session("poteto-agent", [skill("unslop"), skill("how")]))
+test("unslop_parent counts only the parent's loads", () => {
+  const childOnly = tree(session("poteto-mode", [delegate()]), session("poteto-agent", [skill("unslop")]))
   assert.equal(check("investigate", childOnly, "unslop_parent").pass, false)
-  assert.equal(check("investigate", childOnly, "how_loaded").pass, false)
-  const parent = tree(session("poteto-mode", [skill("how"), read(), skill("unslop")]))
-  assert.equal(check("investigate", parent, "how_loaded").pass, true)
+  const parent = tree(session("poteto-mode", [read(), skill("unslop")]))
   assert.equal(check("investigate", parent, "unslop_parent").pass, true)
 })
 
@@ -124,7 +121,7 @@ test("the plain-build gate wants a commit, no mode entry, and no hidden pstack s
 
 test("summarize scores clean runs, counts failures as errors, and prints the metric line last", () => {
   const good = tree(session("poteto-mode", [skill("how"), read(), skill("unslop")]))
-  const half = tree(session("poteto-mode", [read(), skill("unslop")]))
+  const half = tree(session("poteto-mode", [read(), read()]))
   const gate = tree(session("build", [edit(), commit()], { entries: [] }))
   const records = [
     { id: "a", scenario: "investigate", exit: 0, durationMs: 1, sessionTree: good },
@@ -134,14 +131,14 @@ test("summarize scores clean runs, counts failures as errors, and prints the met
     { id: "e", scenario: "plain-build", exit: 0, durationMs: 1, sessionTree: gate },
   ]
   const summary = summarize(records, 6)
-  assert.equal(summary.routingAccuracy, 3 / 4)
+  assert.equal(summary.routingAccuracy, 1 / 2)
   assert.equal(summary.errors, 2)
-  assert.deepEqual(summary.table.investigate, { runs: 4, scored: 2, checks: { how_loaded: 1, unslop_parent: 2 } })
+  assert.deepEqual(summary.table.investigate, { runs: 4, scored: 2, checks: { unslop_parent: 1 } })
   assert.equal(summary.gates[0].pass, true)
   const lines = report(summary).split("\n")
   assert.ok(lines.includes("gate=pass plain-build scored=1/1 committed=1/1 no_mode_entry=1/1 no_hidden_skill=1/1"))
   assert.ok(lines.includes("error d: no tool calls"))
-  assert.equal(lines.at(-1), "routing_accuracy=0.75 errors=2 work=3/6 commits=1 toolcalls=7")
+  assert.equal(lines.at(-1), "routing_accuracy=0.50 errors=2 work=3/6 commits=1 toolcalls=7")
 })
 
 test("a matrix row with no playbook or skills to load passes with no tool calls, and one that has them errors", () => {
@@ -183,12 +180,12 @@ test("a playbook or SKILL.md read through the shell counts as a read or a load",
   assert.deepEqual([direct.pass, direct.picked], [true, "feature"])
   const cd = check("matrix:feature@cc-slash", tree(session("build", [commit(`cd ${root}/poteto-mode/playbooks/ && cat feature.md`)])), "playbook")
   assert.equal(cd.pass, true)
-  const loaded = check("matrix:how@cc-slash", tree(session("build", [commit(`cd ${root} && cat how/SKILL.md`), edit()])), "skills")
+  const loaded = check("matrix:why@cc-slash", tree(session("build", [commit(`cd ${root} && cat why/SKILL.md`), edit()])), "skills")
   assert.equal(loaded.pass, true)
 })
 
 test("the matrix playbook check passes when the first todowrite carries step 1, whitespace and backticks aside", () => {
-  const result = check("matrix:feature@build", tree(session("build", [todos("Size the change per **Size the task first** in `SKILL.md`.  When you can't map the affected code\nfrom a quick read, load the how skill with the skill tool and run it over the subsystem.", "Name the data shape")])), "playbook")
+  const result = check("matrix:feature@build", tree(session("build", [todos("Size the change per **Size the task first** in `SKILL.md`,  then trace\nthe affected subsystem.", "Name the data shape")])), "playbook")
   assert.deepEqual([result.pass, result.picked], [true, "feature"])
 })
 
@@ -200,10 +197,10 @@ test("the matrix playbook check fails on a wrong pick and names it", () => {
 })
 
 test("skills_ran wants the skill's own work between its load and the first code action", () => {
-  const loadedOnly = tree(session("poteto-mode", [skill("how"), delegate()]))
+  const loadedOnly = tree(session("poteto-mode", [skill("why"), delegate()]))
   assert.equal(check("matrix:why@agent", loadedOnly, "skills_ran").pass, false)
-  const ran = tree(session("poteto-mode", [skill("how"), delegate("explore"), delegate()]))
-  assert.equal(check("matrix:why@agent", ran, "skills_ran").detail, "how ran before acting")
+  const ran = tree(session("poteto-mode", [skill("why"), delegate("general"), delegate()]))
+  assert.equal(check("matrix:why@agent", ran, "skills_ran").detail, "why ran before acting")
   const why = tree(session("poteto-mode", [skill("why"), commit("git log --oneline -- src/money.js"), edit()]))
   assert.equal(check("matrix:why@agent", why, "skills_ran").pass, true)
 })
@@ -216,18 +213,18 @@ test("skills_ran scores only rows that expect a skill whose own work it can see"
 
 test("a gate-rejected call is not the moment the session acted", () => {
   const rejected = { ...edit(), state: { status: "error", input: {} } }
-  const run = tree(session("poteto-mode", [skill("feature"), rejected, skill("how"), delegate("explore"), edit()]))
+  const run = tree(session("poteto-mode", [skill("feature"), rejected, skill("why"), delegate("general"), edit()]))
   assert.equal(check("matrix:why@agent", run, "skills_ran").pass, true)
   assert.equal(decided(tree(session("poteto-mode", [skill("feature"), rejected]))), false)
 })
 
 test("the matrix skills check fails when the skill loads only after the first edit", () => {
-  const late = check("matrix:why@agent", tree(session("poteto-mode", [read(), edit(), skill("how")])), "skills")
+  const late = check("matrix:why@agent", tree(session("poteto-mode", [read(), edit(), skill("why")])), "skills")
   assert.equal(late.pass, false)
-  assert.match(late.detail, /first loads how$/)
+  assert.match(late.detail, /first loads why$/)
   const childEdit = session("general", [edit()])
   assert.equal(check("matrix:why@agent", tree(session("poteto-mode", [delegate("general"), skill("why")]), childEdit), "skills").pass, false)
-  assert.equal(check("matrix:why@agent", tree(session("poteto-mode", [skill("tdd"), skill("how"), delegate()])), "skills").pass, true)
+  assert.equal(check("matrix:why@agent", tree(session("poteto-mode", [skill("tdd"), skill("why"), delegate()])), "skills").pass, true)
 })
 
 test("avoids passes when none of the expected-avoid skills load and fails naming the one that did", () => {

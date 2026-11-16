@@ -1,6 +1,6 @@
 # pstack for OpenCode
 
-pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `how` to explain code, `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 63 skills in `src/skills` include the `principle-*` skills that the playbooks cite, and `/thermos`, which runs two harsh branch reviews in parallel. The five agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, the `comment-sicko` comment reviewer, and the two thermo-nuclear reviewers that `/thermos` spawns.
+pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 63 skills in `src/skills` include the `principle-*` skills that the playbooks cite, and `/thermos`, which runs two harsh branch reviews in parallel. The five agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, the `comment-sicko` comment reviewer, and the two thermo-nuclear reviewers that `/thermos` spawns.
 
 pstack was ported from poteto's [pstack in cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack), which is MIT licensed, and that license still ships.
 
@@ -40,7 +40,7 @@ pstack needs two settings under `experimental` in `opencode.jsonc`. The installe
 }
 ```
 
-`todo` gives agents `todowrite`, which every playbook uses for its todo list. `subagent_depth` lets a delegate run a skill that spawns its own subagents, such as `/no-comments` calling `/how`.
+`todo` gives agents `todowrite`, which every playbook uses for its todo list. `subagent_depth` lets a delegate run a skill that spawns its own subagents, such as a delegate running `/no-comments`, which spawns `comment-sicko`.
 
 Then run `/setup-pstack` once. It finds the models you have and writes a model per role to `~/.config/opencode/pstack-models.md`.
 

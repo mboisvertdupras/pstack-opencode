@@ -1,5 +1,5 @@
 ---
-requires: benchmark-checklist, how, principle-sequence-verifiable-units
+requires: benchmark-checklist, principle-sequence-verifiable-units
 ---
 
 ### Perf issue
@@ -7,7 +7,7 @@ requires: benchmark-checklist, how, principle-sequence-verifiable-units
 **You own the measurement story. Plan, review, verify the numbers.** Tie every fix to a measurement, don't read source instead of measuring.
 
 1. Capture a baseline trace via the matching control skill. Vet the baseline, and each later number, with the `benchmark-checklist` skill.
-2. Load the `how` skill with the `skill` tool and run it to ground hypotheses. Don't claim a perf ceiling without running it first.
+2. Trace the code to ground hypotheses. Don't claim a perf ceiling without running it first.
    Try the performance mantras in order, cheapest first:
    1. Don't do it. Stop work whose result nothing uses rather than cheapening it.
    2. Do it, but don't do it again.
