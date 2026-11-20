@@ -349,36 +349,44 @@ test("a pstack delegate's subagent calls run in the foreground, so its report wa
 })
 
 test("a pstack delegate cannot start a background shell job, because its parent takes its first turn end as the report", async () => {
-  const sessions = { root: { agent: "poteto-mode" }, child: { agent: "poteto-agent", parentID: "root" }, other: { agent: "general", parentID: "root" } }
+  const sessions = { root: { agent: "poteto-mode" }, child: { agent: "poteto-agent", parentID: "root" } }
   const { ctx, state } = fakeContext({ sessions })
   await plugin.setup(ctx)
   const job = (sessionID, agent, input) => ({ tool: "shell", sessionID, agent, input: { command: "npm test", ...input } })
   await assert.rejects(
     async () => state.hooks["execute.before"](job("child", "poteto-agent", { background: true })),
-    /^Error: pstack: .*foreground with `timeout: 0`.*nohup <command> > <log> 2>&1 &/s,
+    (error) => {
+      assert.match(error.message, /^pstack: .*foreground, and pass a `timeout` in milliseconds longer than the check needs\. A command that outlives its timeout moves to the background, and a report you send before it finishes reaches your parent without its result\..*nohup <command> > <log> 2>&1 &/s)
+      assert.doesNotMatch(error.message, /timeout: 0/)
+      return true
+    },
   )
   await state.hooks["execute.before"](job("child", "poteto-agent", { background: false }))
   await state.hooks["execute.before"](job("child", "poteto-agent", {}))
   await state.hooks["execute.before"](job("root", "poteto-mode", { background: true }))
-  await state.hooks["execute.before"](job("other", "general", { background: true }))
 })
 
-test("a session a pstack delegate spawned, at any depth, cannot start a background shell job either", async () => {
+test("every subagent in a poteto-mode tree, at any depth, cannot start a background shell job", async () => {
   const sessions = {
     root: { agent: "poteto-mode" },
     delegate: { agent: "poteto-agent", parentID: "root" },
     helper: { agent: "general", parentID: "delegate" },
     deeper: { agent: "general", parentID: "helper" },
-    plain: { agent: "general", parentID: "root" },
-    plainer: { agent: "general", parentID: "plain" },
+    worker: { agent: "general", parentID: "root" },
+    workerChild: { agent: "general", parentID: "worker" },
+    commanded: { agent: "build" },
+    commandedChild: { agent: "general", parentID: "commanded" },
+    plain: { agent: "build" },
+    plainChild: { agent: "general", parentID: "plain" },
+    plainer: { agent: "explore", parentID: "plainChild" },
   }
-  const { ctx, state } = fakeContext({ sessions })
+  const { ctx, state } = fakeContext({ sessions, storage: { "mode/commanded": true } })
   await plugin.setup(ctx)
-  const job = (sessionID, agent) => ({ tool: "shell", sessionID, agent, input: { command: "npm test", background: true } })
-  for (const [sessionID, agent] of [["helper", "general"], ["deeper", "general"]]) {
-    await assert.rejects(async () => state.hooks["execute.before"](job(sessionID, agent)), /pstack: a subagent under a pstack delegate cannot start a background shell job/, sessionID)
+  const job = (sessionID) => ({ tool: "shell", sessionID, agent: sessions[sessionID].agent, input: { command: "npm test", background: true } })
+  for (const sessionID of ["helper", "deeper", "worker", "workerChild", "commandedChild"]) {
+    await assert.rejects(async () => state.hooks["execute.before"](job(sessionID)), /^Error: pstack: .*cannot start a background shell job/, sessionID)
   }
-  for (const [sessionID, agent] of [["plain", "general"], ["plainer", "general"]]) await state.hooks["execute.before"](job(sessionID, agent))
+  for (const sessionID of ["root", "commanded", "plain", "plainChild", "plainer"]) await state.hooks["execute.before"](job(sessionID))
 })
 
 test("a subagent in a poteto-mode tree cannot start an untracked session with opencode run", async () => {

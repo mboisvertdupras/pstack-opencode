@@ -200,10 +200,11 @@ export const isCommit = ({ tool, input }) => tool === "shell" && GIT_COMMIT.test
 
 export const isBackgroundShell = ({ tool, input }) => tool === "shell" && input.background === true
 
-export const DELEGATE_BACKGROUND_SHELL = [
-  "pstack: a subagent under a pstack delegate cannot start a background shell job.",
+export const SUBAGENT_BACKGROUND_SHELL = [
+  "pstack: a subagent cannot start a background shell job.",
   "Your parent takes your first turn end as your report, and the job's completion notice would reach only you, after that report.",
-  "Run a check whose result you need in the foreground with `timeout: 0`.",
+  "Run a check whose result you need in the foreground, and pass a `timeout` in milliseconds longer than the check needs.",
+  "A command that outlives its timeout moves to the background, and a report you send before it finishes reaches your parent without its result.",
   "Start a server with `nohup <command> > <log> 2>&1 &` in a foreground call, and stop it before you report.",
 ].join(" ")
 
@@ -244,10 +245,10 @@ export function noCodeModels(text) {
 export const noCodeMessage = (model) =>
   `pstack: this session runs ${model}, which the \`no code\` line in pstack-models.md keeps out of source files. Spawn a subagent on the first rung of the task's ladder with \`model\` set, so it does not inherit this model, give it the edit, then review and verify its diff. Do not make the edit through the shell.`
 
-export const toolRules = ({ catalog, sessionState, isDelegate, isPotetoSubagent, restrictedModel }) => [
+export const toolRules = ({ catalog, sessionState, isPotetoSubagent, restrictedModel }) => [
   { match: isGated, scope: (event) => sessionState(event.sessionID), message: (state, event) => gate(state, event, catalog) },
-  { match: isBackgroundShell, scope: (event) => isDelegate(event.sessionID), message: () => DELEGATE_BACKGROUND_SHELL },
   { match: isOpencodeRun, scope: (event) => isPotetoSubagent(event.sessionID), message: () => SUBAGENT_OPENCODE_RUN },
+  { match: isBackgroundShell, scope: (event) => isPotetoSubagent(event.sessionID), message: () => SUBAGENT_BACKGROUND_SHELL },
   { match: editsSource, scope: (event) => restrictedModel(event.sessionID), message: noCodeMessage },
 ]
 

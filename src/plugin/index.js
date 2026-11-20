@@ -184,7 +184,7 @@ export default {
       const model = `${providerID}/${id}`
       return noCodeModels(loadModels()).has(model) ? model : undefined
     }
-    const rules = toolRules({ catalog, sessionState, isDelegate, isPotetoSubagent, restrictedModel })
+    const rules = toolRules({ catalog, sessionState, isPotetoSubagent, restrictedModel })
 
     await ctx.tool.hook("execute.before", async (event) => {
       let blocked
