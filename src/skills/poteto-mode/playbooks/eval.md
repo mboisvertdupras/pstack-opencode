@@ -18,7 +18,7 @@
 2. **Set up sanitized environments.** Per-candidate working dir with the variant in place. Plant any context an organic task would have: a project skeleton, the skills the candidate would naturally read.
 3. **Author one organic prompt.** What a user would type. No leakage of what's being measured.
 4. **Spawn N parallel candidates** on different models per the `arena` skill's Phase B. Each works in its own sanitized dir. Same prompt to each. Pick each subagent's reasoning level for the job, per the Subagents section. An agent that only dispatches, polls, or packs results runs on `<provider>/claude-opus-5-5#medium`.
-5. **Spawn one blinded judge** on a different model family per the `arena` skill's Phase C. Judge sees outputs by sanitized label and the rubric, never a model name.
+5. **Spawn one blinded judge** picked per the `arena` skill's Phase C. Judge sees outputs by sanitized label and the rubric, never a model name.
 6. **Verify the chain from transcripts, not self-report.** Print each candidate's session as JSON with `opencode session export <sessionID>`, using the `sessionID` its `subagent` call returned. Read only this project's sessions, because other projects' sessions are private chats unrelated to the eval. Look at which files each candidate actually opened. Grade chain-following from the files it really read plus the shape of the code, never from the candidate's own claims.
 7. **Read every candidate output yourself** end to end. Compare to the judge's verdict. Disagreement means a model is biased or the rubric is ambiguous. Synthesize.
 
