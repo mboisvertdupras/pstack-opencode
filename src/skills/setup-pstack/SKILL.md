@@ -13,7 +13,7 @@ Write `~/.config/opencode/pstack-models.md`, the file that sets pstack's model p
 
 Inside `execute`, page through `tools.opencode.models({ limit: 100, offset })`, starting at `offset: 0` and passing the returned `next` until it is `null`. Each model's `id` is `<provider>/<model>`, and each entry in its `variants` contributes one value, `<provider>/<model>#<variant>`. A model with no variants contributes its bare `id`. Those values are the detected set, and each is a value you can pass as a `subagent` call's `model`. If you cannot detect any, ask the user to paste the values they have access to. Never write a real value you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected values.
 
-Fill in each default's `<provider>/` with a provider that lists that model, preferring the provider of the current session's model. When no provider lists a default's model, write `inherit-parent` for that role and tell the user why.
+Map each default to a detected model by its `id` or `name`. `claude-opus-5-5` is Opus 5.5, `claude-fable-5-2` is Fable 5.2, and `gemini-4-neon` is Gemini 4 Neon, and a provider may list one under a short name such as `opus` or `fable`. When more than one provider lists it, prefer the provider of the current session's model. When no provider lists a default's model, write `inherit-parent` for that role and tell the user why.
 
 ### 2. Load current state
 
