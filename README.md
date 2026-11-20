@@ -42,7 +42,7 @@ pstack needs two settings under `experimental` in `opencode.jsonc`. The installe
 
 `todo` gives agents `todowrite`, which every playbook uses for its todo list. `subagent_depth` lets a delegate run a skill that spawns its own subagents, such as a delegate running `/no-comments`, which spawns `comment-sicko`.
 
-Then run `/setup-pstack` once. It finds the models you have and writes a model per role to `~/.config/opencode/pstack-models.md`.
+Then run `/setup-pstack` once. It finds the models you have and writes a model per role to `~/.config/opencode/pstack-models.md`. Out of the box, code delegates (feature, refactoring, bug fix, perf, hillclimb), prose, and judgment run on Opus 5.5 at xhigh, and no role runs above xhigh. Outside a review panel, Fable 5.2 runs only when you name it, on a role line or for the task, or after two Opus 5.5 runs of the same brief fail. The default panel is Fable 5.2, Opus 5.5, and Gemini 4 Neon.
 
 ## Use pstack
 
