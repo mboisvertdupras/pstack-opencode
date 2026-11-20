@@ -30,7 +30,7 @@ Spawn workers with `agent: "general"`, `background: true`, and the step 3 model,
 
 When a worker must start from a non-default branch `<b>`, its brief says to run `git switch -c <work-branch> <b>` in the worktree first.
 
-Every brief stands alone. Include the goal, scope, exact slice or race arm, how to verify, and what to report. Reports use `PASS`, `ISSUES`, or `BLOCKED` with evidence. A worker that can prove a defect reports `ISSUES` and lists every issue it can prove, not only the first.
+Every brief stands alone. Include the goal, scope, exact slice or race arm, how to verify, and what to report. When workers share a lock or another resource only one can hold, the brief names how long a worker may wait for it and says to report `BLOCKED` with the holder once that time runs out. Reports use `PASS`, `ISSUES`, or `BLOCKED` with evidence. A worker that can prove a defect reports `ISSUES` and lists every issue it can prove, not only the first.
 
 If a worker drops out, proceed with N-1 and note it.
 
