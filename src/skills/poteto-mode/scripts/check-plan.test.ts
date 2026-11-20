@@ -20,7 +20,7 @@ ${rule}
 ### PR mechanics
 ### Verdict and merge
 ### Boot recipe
-with the \`skill\` tool, sleep 3600, status message
+with the \`skill\` tool, last audit, status message
 
 ## PR 1
 **Depends on.** None.
