@@ -10,7 +10,7 @@ Answer the user's question about pstack, hand them a prompt they can send, and l
 
 A message that asks for work, such as "use pstack to fix this bug", is not a help question. Read [`poteto-mode`](../poteto-mode/SKILL.md), do the work under it, and mention once that the `poteto-mode` agent keeps it on.
 
-This file maps questions to the skills and guide pages that hold the answers. Those files own the details. Read the file you route to before you quote it, and trust it when it disagrees with this map. The plugin turns the links here into absolute paths in its folder, which is either the installed `pstack-opencode` package or the user's checkout of this repo that the installer linked, so give the user that absolute path.
+This file maps questions to the skills that hold the answers. Those files own the details. Read the file you route to before you quote it, and trust it when it disagrees with this map. The plugin turns the links here into absolute paths in its folder, so give the user that path.
 
 ## Find out what they need
 
@@ -35,26 +35,22 @@ When the models file is missing and it matters, ask whether the user wants to pi
 
 ## Get set up
 
-1. Add `"plugins": ["pstack-opencode"]` to `~/.config/opencode/opencode.jsonc`. The plugin registers every skill, its slash command, and the three agents. To run from a checkout of this repo instead, run `npm run install-pstack` there. It links `src/` into `~/.config/opencode`, or into one project's `.opencode/` with `npm run install-pstack -- --project <dir>`, and copies nothing. Either way, add two `experimental` settings, which the installer prints when they are missing: `"todo": true` gives agents `todowrite`, and `"subagent_depth": 2` lets a delegate run skills that spawn their own subagents.
-2. Run [`/setup-pstack`](../setup-pstack/SKILL.md). It asks for a reasoning budget, maps a model to each role, and writes `~/.config/opencode/pstack-models.md`. The plugin reads that file at the next request, so no restart is needed. Then it offers once each to generate a verification skill and a formal verification skill for the project, unless the project already has one.
+1. Add `"plugins": ["pstack-opencode"]` to `~/.config/opencode/opencode.jsonc`, or run `npm run install-pstack` in a checkout of the pstack repo to link it instead. Add `"todo": true` and `"subagent_depth": 2` under `experimental`. The first gives agents `todowrite`, and the second lets a delegate run skills that spawn their own subagents.
+2. Run [`/setup-pstack`](../setup-pstack/SKILL.md). It asks for a reasoning budget, maps a model to each role, and writes `~/.config/opencode/pstack-models.md`. The plugin rereads that file when it changes, so no restart is needed. Then it offers once each to generate a verification skill and a formal verification skill for the project, unless the project already has one.
 3. Start a real task with `/poteto-mode`, a goal, and a check that can pass or fail.
 
-Installing changes nothing until the user invokes a skill. Only `/setup-pstack` loads from the user's words. Offer to word their first prompt with them, per [`references/prompting.md`](references/prompting.md).
+Installing changes nothing until the user invokes a skill. Only `/setup-pstack`, `deslop`, `control-cli`, and `control-ui` load from the user's words. The other skills are hidden from the agent's skill catalog, but each still loads by ID. Offer to word their first prompt with them, per [`references/prompting.md`](references/prompting.md).
 
 If cost is the worry, say where the tokens go and how to spend fewer. pstack spends extra tokens on subagents and review panels. Rerun `/setup-pstack` and pick a smaller budget or cheaper models. A role set to `auto` or `inherit-parent` runs on the chat's model, which saves tokens when the chat runs on a cheaper model. A shorter panel list runs fewer subagents, one for each entry. Save `/poteto-mode` for work that needs rigor.
 
 ## Start a task with `/poteto-mode`
 
-`/poteto-mode` matches the task to a playbook, tracks the steps it will run in the todo list when there are three or more, and runs the other skills as the steps need them. The final reply names any step it skipped and why. A good prompt states the goal and how to tell it's done. It doesn't list skills, because a hand-written sequence tends to drop or reorder steps the playbook would keep. Read [`references/prompting.md`](references/prompting.md) before you help word one.
+`/poteto-mode` matches the task to a playbook, copies the playbook's steps into the todo list, and runs the other skills as the steps need them. A good prompt states the goal and how to tell it's done. It doesn't list skills, because a hand-written sequence tends to drop or reorder steps the playbook would keep. Read [`references/prompting.md`](references/prompting.md) before you help word one.
 
 Either way of starting it keeps the mode on:
 
-- `/poteto-mode` attaches the skill to its message and keeps a `pstack-mode` instruction entry on that session for the rest of the session, whatever agent it runs under.
-- The `poteto-mode` agent attaches the skill to the first message and keeps the same entry until the user switches agents. Press Tab to select it, or start with `opencode --agent poteto-mode`. Both work with the package and with the installer, and neither needs a file in `agents/`.
-
-The entry keeps the mode in context every turn and through compaction.
-
-A user file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
+- `/poteto-mode` attaches the skill to its message and keeps a `pstack-mode` instruction entry on that session for the rest of the session.
+- The `poteto-mode` agent attaches the skill to the first message and keeps the same entry until the user switches agents. Press Tab to select it, or start with `opencode --agent poteto-mode`.
 
 Mid-chat, "new task" makes the mode match a fresh playbook. `/poteto-mode` already uses `poteto-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with `agent: "poteto-agent"`.
 
@@ -74,7 +70,7 @@ The default answer is `/poteto-mode`, which runs most of the others when its ste
 | Catch up on what changed in this chat since their last message, in plain words and small visuals, with every item waiting on them listed and decidable from the reply alone | [`/ketchup`](../ketchup/SKILL.md) |
 | Catch up like `/ketchup`, in a short subtitled video of slides, with the waiting calls as text under it | [`/ketchup-video`](../ketchup-video/SKILL.md) |
 | Know what a small diff could break outside itself | [`/blast-radius`](../blast-radius/SKILL.md) |
-| Settle types and module shape when several designs are credible and the pick is costly to reverse | [`/architect`](../architect/SKILL.md) |
+| Settle types and module shape before code that crosses a function boundary | [`/architect`](../architect/SKILL.md) |
 | Get several attempts at one brief, merged into the best one | [`/arena`](../arena/SKILL.md) |
 | Run parallel checks over slices, or race workers, each in its own worktree | [`/swarm`](../swarm/SKILL.md) |
 | Have different models review a diff and try to break it | [`/interrogate`](../interrogate/SKILL.md) |
@@ -113,11 +109,10 @@ Close calls:
 Not in pstack:
 
 - `/goal` is built into the app. A skill-authoring skill such as `skill-creator` comes from the user's own catalog when they have one.
-- pstack has no `/orchestrate` skill. If the slash menu shows `/orchestrate`, another plugin provides it.
 
 ## Playbooks and principles
 
-Playbooks are step lists inside `/poteto-mode`. They load as hidden skills, but they have no slash command. Inside `/poteto-mode`, describing the task picks one, and these phrases name one directly:
+Playbooks are step lists inside `/poteto-mode`. They load as hidden skills by ID, but they have no slash command. Inside `/poteto-mode`, describing the task picks one, and these phrases name one directly:
 
 - "babysit this pr" or "check on pr 123" runs Babysit. It drives the PR to merge-ready and stops there. It doesn't merge unless the user asks to merge, land, or ship.
 - "land the stack" runs Shipping.
@@ -136,11 +131,11 @@ Principles are one-rule skills that `/poteto-mode` reads and cites in its replie
 
 | Symptom | Fix |
 |---|---|
-| The mode stopped applying after a few turns | It was started with `/poteto-mode`, which attaches to one message. Switch to the `poteto-mode` agent, or start each task with `/poteto-mode`. |
+| The mode stopped applying after a few turns | The session left the `poteto-mode` agent. Switch back to it, or start the task with `/poteto-mode`. |
 | A question got treated as the next step of the last task | Say "new task", or say the turn doesn't need the mode. |
-| A new model choice had no effect | The plugin rereads `~/.config/opencode/pstack-models.md` at each request. Check that the file has the new line and that the value is a model `opencode models` lists. |
+| A new model choice had no effect | The plugin rereads `~/.config/opencode/pstack-models.md` when it changes. Check that the file has the new line and that the value is a model `opencode models` lists. |
 | Runs cost more than expected | See the cost paragraph under Get set up. |
-| A skill didn't load on its own | Only `/setup-pstack` loads from the user's words. The others load when the user types them or when `/poteto-mode` runs them, and it doesn't run every skill. |
+| A skill didn't load on its own | Only `/setup-pstack`, `deslop`, `control-cli`, and `control-ui` load from the user's words. The others load when the user types them or when `/poteto-mode` runs them, and it doesn't run every skill. |
 | Parallel agents overwrote each other | Give each agent its own git worktree. |
 | An overnight run moved but finished nothing | `/goal` needs a check that can pass or fail, not a duration. |
 | The reply claims success from a green build | Ask for the real command, flow, stored value, or profile. That's the prove-it-works principle. |

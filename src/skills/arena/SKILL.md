@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Arena
 
-Open a todo list with `todowrite` with one entry per phase (Frame, Fan out, Cross-judge, Pick, Graft, Verify) before launching anything.
+Open a todo list with `todowrite`, one entry per phase (Frame, Fan out, Cross-judge, Pick, Graft, Verify) before launching anything.
 
 ## Phase A: Frame
 
@@ -14,7 +14,7 @@ Every candidate gets the same prompt, so the prompt is the contract.
 
 1. State the artifact each candidate is producing.
 2. Derive the rubric, 3-6 concrete gradeable criteria for what success looks like on *this* task. It is the picker's tool in Phase D. Candidates only see the task.
-3. Pick the runners from the `arena runners` line in the `pstack-models` instruction entry, by default `<provider>/claude-fable-5-2#high`, `<provider>/claude-opus-5-5#high`, and `<provider>/gemini-4-neon#xhigh` from a provider that lists each. Omit `model` for a default seat no provider lists, and say so. An `auto` or `inherit-parent` entry is the parent model, so omit `model`. If the `subagent` tool rejects a value, use the closest listed model of the same family (`opencode models`) or drop the seat, keep at least two runners (one when the line has one entry), and say so. Families go by the model after the `<provider>/`, not the provider. Fable is one family (`claude-fable-*`, or `fable` under any provider). The other Claude models are another (`claude-*`, and `opus`, `sonnet`, or `haiku` under any provider). Gemini (`gemini-*`) is a third. Any other model's family is its text before the first hyphen. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent's reasoning level per the Subagents section of the `poteto-mode` skill.
+3. Pick the runners from the `arena runners` line in the `pstack-models` instruction entry, by default `<provider>/claude-fable-5-2#high`, `<provider>/claude-opus-5-5#high`, and `<provider>/gemini-4-neon#xhigh` from a provider that lists each. Omit `model` for a default seat no provider lists, and say so. An `auto` or `inherit-parent` entry is the parent model, so omit `model` and spawn with `agent: "general"`. If the `subagent` tool rejects a value, use the closest listed model of the same family (`opencode models`) or drop the seat, keep at least two runners, and say so. Families go by the model after `<provider>/`, and the longest prefix wins: `claude-fable-*` (or `fable`), `claude-*` (or `opus`, `sonnet`, `haiku`), and `gemini-*`. Any other model's family is its text before the first hyphen. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent's reasoning level per the Subagents section of the `poteto-mode` skill.
 4. Give each candidate its own output location (a git worktree from `tools.opencode.worktree_create({ name })` inside `execute` where possible, otherwise `/tmp/arena-<slug>/candidate-<n>/`), per the `principle-separate-before-serializing-shared-state` skill.
 
 ## Phase B: Fan out
@@ -25,7 +25,7 @@ If a candidate produces no output, proceed with N-1 and note the dropout.
 
 ## Phase C: Cross-judge
 
-After all Phase B candidates complete, spawn one judge with `agent: "explore"` from the `arena cross-judge pool` line in the `pstack-models` instruction entry, by default `<provider>/claude-opus-5-5#high`, `<provider>/gemini-4-neon#xhigh`. Its brief says "do not edit files", and you check `git status` after it returns. The judge is never from the parent's family, as Phase A step 3 defines families, so Fable can judge a parent from another Claude family and the reverse. Use the first entry from another family. An `auto` or `inherit-parent` entry is the parent model. If you do not know the parent's model, use the first real value and say that the family check did not run. If the `subagent` tool rejects a value, use the closest listed model of the same family, then the next entry from another family. If no pool entry from another family runs, try the default pool's entries from another family the same way. If none of those runs, skip the judge, pick the base alone in Phase D, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.
+After all Phase B candidates complete, spawn one judge with `agent: "explore"` from the `arena cross-judge pool` line in the `pstack-models` instruction entry, by default `<provider>/claude-opus-5-5#high`, `<provider>/gemini-4-neon#xhigh`. Its brief says "do not edit files", and you check `git status` after it returns. The judge is never from the parent's vendor, and Fable counts as Claude for that check, so use the first entry from another vendor. An `auto` or `inherit-parent` entry is the parent model. If you do not know the parent's model, use the first real value and say that the vendor check did not run. If the `subagent` tool rejects a value, use the closest listed model of the same family, then the next such entry, or skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.
 
 ## Phase D: Pick a base
 
