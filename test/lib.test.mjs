@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -183,6 +183,8 @@ test("every shipped playbook registers under its stem with its Playbooks list en
   const playbooks = readSkills(dir).filter((skill) => skill.kind === "playbook")
   assert.deepEqual(playbooks.map((playbook) => playbook.id).sort(), stems.sort())
   for (const playbook of playbooks) assert.match(playbook.description, /\.$/, `${playbook.id} has a Playbooks list entry`)
+  const listed = [...playbookDescriptions(readFileSync(join(dir, "poteto-mode", "SKILL.md"), "utf8")).keys()]
+  assert.deepEqual(listed.sort(), stems.sort(), "every Playbooks list entry has a playbook file")
 })
 
 const CATALOG = new Map([

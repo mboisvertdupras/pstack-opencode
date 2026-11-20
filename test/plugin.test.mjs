@@ -319,8 +319,10 @@ test("a commit waits for the loaded playbook's skills as well as deslop", async 
   await plugin.setup(ctx)
   for (const id of ["feature", "deslop"]) await state.hooks["execute.after"](loaded("s1", "poteto-mode", id))
   const commit = shell("s1", "poteto-mode", "git commit -m a")
-  await assert.rejects(async () => state.hooks["execute.before"](commit), /Feature.*`principle-model-the-domain`.*rerun `git commit` as its own command/s)
+  await assert.rejects(async () => state.hooks["execute.before"](commit), /Feature.*`principle-model-the-domain` and `architect`.*rerun `git commit` as its own command/s)
   await state.hooks["execute.after"](loaded("s1", "poteto-mode", "principle-model-the-domain"))
+  await assert.rejects(async () => state.hooks["execute.before"](commit), /Feature.*`architect`/s)
+  await state.hooks["execute.after"](loaded("s1", "poteto-mode", "architect"))
   await state.hooks["execute.before"](commit)
 })
 

@@ -238,7 +238,7 @@ export const MATRIX_CASES = [
     expect: { playbook: "refactoring" },
   },
   { id: "feature", prompt: FEATURE_PROMPT, expect: { playbook: "feature", skills: ["principle-model-the-domain"] } },
-  { id: "small-feature", prompt: SMALL_FEATURE_PROMPT, expect: { playbook: "feature", avoid: ["architect", "arena", "interrogate"] } },
+  { id: "small-feature", prompt: SMALL_FEATURE_PROMPT, expect: { playbook: "feature", avoid: ["arena", "interrogate"] } },
   { id: "how", prompt: INVESTIGATE_PROMPT, expect: { playbook: "investigation" } },
   {
     id: "why",

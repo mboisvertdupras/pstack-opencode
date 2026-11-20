@@ -229,9 +229,9 @@ test("the matrix skills check fails when the skill loads only after the first ed
 
 test("avoids passes when none of the expected-avoid skills load and fails naming the one that did", () => {
   const clean = check("matrix:small-feature@agent", tree(session("poteto-mode", [skill("how"), edit()])), "avoids")
-  assert.deepEqual(clean, { pass: true, detail: "none of architect, arena, interrogate loaded" })
-  const loaded = check("matrix:small-feature@agent", tree(session("poteto-mode", [skill("architect"), edit()])), "avoids")
-  assert.deepEqual(loaded, { pass: false, detail: "loaded architect" })
+  assert.deepEqual(clean, { pass: true, detail: "none of arena, interrogate loaded" })
+  const loaded = check("matrix:small-feature@agent", tree(session("poteto-mode", [skill("interrogate"), edit()])), "avoids")
+  assert.deepEqual(loaded, { pass: false, detail: "loaded interrogate" })
   const inChild = check("matrix:small-feature@agent", tree(session("poteto-mode", [delegate()]), session("poteto-agent", [skill("arena"), edit()])), "avoids")
   assert.deepEqual(inChild, { pass: false, detail: "loaded arena" })
 })
