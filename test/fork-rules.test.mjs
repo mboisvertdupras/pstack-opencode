@@ -7,7 +7,11 @@ import { fileURLToPath } from "node:url"
 const SKILLS = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "skills")
 
 const FORK_RULES = {
-  "poteto-mode/SKILL.md": ["**One owner per check per commit.**"],
+  "poteto-mode/SKILL.md": ["**One owner per check per commit.**", "**Time every check.**"],
+  "poteto-mode/worker.md": [
+    "only when your kickoff names you their owner",
+    "report the seconds each check takes",
+  ],
   "poteto-mode/playbooks/autopilot-full.md": [
     "leave the full checks to the gates lane",
     "One gates lane runs the full checks at that SHA",
