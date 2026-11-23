@@ -99,6 +99,8 @@ Load the leaf skill for any principle you apply. Each entry names when it applie
 
 You own every subagent's work. Review the diff and write your own summary. A second opinion is the same prompt on another vendor's model.
 
+**One owner per check per commit.** A test suite, type check, lint, or build gives the same result at the same commit, so each brief names the agent that runs the project's full checks and the SHA it runs them at. Implementers run the tests their change touches. Reviewers run the commands that prove their findings. Every other layer, the root included, reads the owner's command, SHA, and result line, and reruns only after the code changes, to prove a finding, or to chase a flake. Live checks on the real surface keep their own lanes.
+
 **Fresh subagents by default.** Give a fix round, a follow-up, a retry, or the next queue item to a fresh subagent with the original brief, every later directive, and the prior agent's report and branch. Continue an existing child through its `sessionID` only when the work needs state that lives in it and is costly to move: its checkout, its uncommitted changes, or a process it still runs.
 
 ## Writing the reply
