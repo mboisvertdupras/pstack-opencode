@@ -18,6 +18,7 @@ const FORK_RULES = {
   ],
   "interrogate/SKILL.md": ["not the project's full checks"],
   "principle-prove-it-works/SKILL.md": ["reruns it only when the code changed"],
+  "benchmark-checklist/SKILL.md": ["freeze the baseline"],
 }
 
 for (const [file, phrases] of Object.entries(FORK_RULES)) {
