@@ -10,6 +10,8 @@ Use this when you produce a performance number: a PR's before and after, a regre
 
 For a quick ballpark the user asked for, one run is enough. Still check questions 4 and 7, and say that it is one run. Skip the rest unless that run looks wrong. A choice between options is never a ballpark.
 
+When one run of a side takes minutes, freeze the baseline. Run the old side once, save its outputs and its timing per part, and never run it again. Change one part, rerun only that part, and compare it with the saved baseline. Run the whole new side once, at the end. A gap several times the part's run-to-run variation needs no repeat. A close call still gets question 5, on the changed part alone. Say the run counts in the report.
+
 ## Before you run anything
 
 - Write down the claim you expect to make, in the words you would ship ("export is 30% faster at p50 on the 60k-row dataset"). The questions test that sentence.
