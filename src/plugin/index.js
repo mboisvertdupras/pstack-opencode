@@ -7,8 +7,6 @@ import {
   MODE_KEY,
   MODELS_KEY,
   blockedBy,
-  commandDescription,
-  commandPrompt,
   entryOps,
   isSkillEvent,
   modeEntry,
@@ -103,32 +101,8 @@ export default {
       }
     }
 
-    const shadowingPath = async (sessionID, skill) => {
-      const session = unwrap(await ctx.session.get({ sessionID }))
-      const directory = session?.location?.directory
-      const registered = unwrap(await ctx.skill.list(directory ? { location: { directory } } : undefined)) ?? []
-      const path = registered.find((entry) => entry.id === skill.id)?.path
-      return path && path !== skill.path ? path : undefined
-    }
-
     await ctx.skill.transform((editor) => {
       for (const skill of skills) editor.add(skill)
-    })
-
-    await ctx.command.transform((editor) => {
-      for (const skill of skills) {
-        if (skill.kind === "playbook" || skill.id.startsWith("principle-")) continue
-        editor.add({
-          name: skill.id,
-          description: commandDescription(skill.description),
-          execute: async ({ sessionID, prompt, delivery }) => {
-            if (skill.id === MODE_AGENT) await ctx.storage.set(modeKey(sessionID), true)
-            const { text, attach } = commandPrompt(skill, prompt.text ?? "", await shadowingPath(sessionID, skill))
-            const attached = attach ? [...(prompt.skills ?? []), { id: skill.id }] : prompt.skills
-            await ctx.session.prompt({ ...prompt, sessionID, delivery, text, ...(attached ? { skills: attached } : {}) })
-          },
-        })
-      }
     })
 
     await ctx.agent.transform((editor) => {

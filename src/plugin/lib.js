@@ -153,21 +153,6 @@ export function readAgents(agentsDir) {
     })
 }
 
-export function commandDescription(description, max = 120) {
-  const sentence = description.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? description
-  if (sentence.length <= max) return sentence
-  return `${sentence.slice(0, sentence.lastIndexOf(" ", max - 3))}...`
-}
-
-export function commandPrompt(skill, text, shadowedBy) {
-  const task = text.trim() || `Run the ${skill.id} skill.`
-  if (!shadowedBy) return { text: task, attach: true }
-  return {
-    text: `Read the pstack \`${skill.id}\` skill at \`${skill.path}\` and follow it. The user skill at \`${shadowedBy}\` has the same ID, so do not load \`${skill.id}\` with the skill tool.\n\n${task}`,
-    attach: false,
-  }
-}
-
 function skillsFingerprint(skills) {
   const hash = createHash("sha256")
   for (const { id, content } of skills.toSorted((a, b) => a.id.localeCompare(b.id))) hash.update(`${id}\0${content}\0`)

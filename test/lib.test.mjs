@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { commandDescription, commandPrompt, entryOps, loadedSkill, modeEntry, parseFrontmatter, playbookDescriptions, playbookSkills, readAgents, readSkills, withEvent } from "../src/plugin/lib.js"
+import { entryOps, loadedSkill, modeEntry, parseFrontmatter, playbookDescriptions, playbookSkills, readAgents, readSkills, withEvent } from "../src/plugin/lib.js"
 
 test("frontmatter reads double-quoted, single-quoted, plain, and folded descriptions", () => {
   const quoted = parseFrontmatter('---\nname: how\ndescription: "Use for \\"how does X work\\"."\ndisable-model-invocation: true\n---\n\n# How\n')
@@ -18,22 +18,6 @@ test("frontmatter reads double-quoted, single-quoted, plain, and folded descript
 
 test("a file without frontmatter is all body", () => {
   assert.deepEqual(parseFrontmatter("# Title\n"), { data: {}, body: "# Title\n" })
-})
-
-test("command descriptions keep the first sentence and cut long ones at a word", () => {
-  assert.equal(commandDescription("Remove AI slop. Then more."), "Remove AI slop.")
-  const long = commandDescription(`${"word ".repeat(40)}end.`, 40)
-  assert.ok(long.length <= 40 && long.endsWith("..."), long)
-})
-
-test("a command attaches its skill, and points at the file when a user skill shadows the ID", () => {
-  const skill = { id: "tdd", path: "/pstack/skills/tdd/SKILL.md" }
-  assert.deepEqual(commandPrompt(skill, "  fix the parser  ", undefined), { text: "fix the parser", attach: true })
-  assert.deepEqual(commandPrompt(skill, "", undefined), { text: "Run the tdd skill.", attach: true })
-  const shadowed = commandPrompt(skill, "fix it", "/home/me/.agents/skills/tdd/SKILL.md")
-  assert.equal(shadowed.attach, false)
-  assert.match(shadowed.text, /Read the pstack `tdd` skill at `\/pstack\/skills\/tdd\/SKILL.md`/)
-  assert.match(shadowed.text, /fix it$/)
 })
 
 test("entry ops put changed values and remove values that are no longer wanted", () => {
