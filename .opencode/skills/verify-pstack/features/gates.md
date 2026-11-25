@@ -10,7 +10,7 @@ In a poteto-mode session, the plugin rejects a `git commit` until `deslop` has l
 
 ## How to get to it (user POV)
 
-- Select the `poteto-mode` agent or send `/poteto-mode`, then give a task that commits.
+- Select the `poteto-mode` agent or mention `@poteto-mode`, then give a task that commits.
 - Spawn a `poteto-agent` that commits.
 - Load a playbook that has `requires` frontmatter, such as Perf issue, then delegate to `poteto-agent`.
 

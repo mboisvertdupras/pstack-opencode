@@ -10,7 +10,7 @@
 - `install-rerun` reports `ok` for a plugin link that already points at this `src/`.
 - `install-refuse` fails on an existing `plugins/pstack` that is not its link, and changes nothing.
 - `install-uninstall` removes its links and keeps anything else.
-- `install-advice` prints the missing `experimental` settings and the `/setup-pstack` step.
+- `install-advice` prints the missing `experimental` settings and the `setup-pstack` skill step.
 
 ## How to get to it (user POV)
 
@@ -26,7 +26,7 @@ Preconditions:
 - `C=$(mktemp -d)` holds an empty scratch folder.
 
 - **Link.** Run `XDG_CONFIG_HOME=$C node scripts/install.mjs`. It prints one `linked` line, `ls -l $C/opencode/plugins` shows a symlink to `src/`, and `$C/opencode/agents` does not exist.
-- **Advice.** The same output lists `"todo": true` and `"subagent_depth": 2` and the `/setup-pstack` step.
+- **Advice.** The same output lists `"todo": true` and `"subagent_depth": 2` and the `setup-pstack` skill step.
 - **Rerun.** Run it again. It prints one `ok` line.
 - **Migrate.** Run the uninstall, then `mkdir -p $C/opencode/plugins $C/opencode/agents`, `ln -s $PWD/dist $C/opencode/plugins/pstack` and `ln -s $PWD/dist/agents/poteto-mode.md $C/opencode/agents/poteto-mode.md`. Install with `--dry-run`. It prints `moved` for the plugin and `removed` for the agent link, and changes nothing. Install again without it. It prints the same two lines, the plugin link now points at `src/`, and the agent link is gone.
 - **Keep.** Run `echo mine > $C/opencode/agents/poteto-agent.md`, then install again. It prints `ok` and `keep` for that file and exits `0`. `cat` shows `mine` unchanged.

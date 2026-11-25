@@ -75,6 +75,15 @@ function skillIdFindings(file, lines, exists) {
   )
 }
 
+function slashFindings(file, lines, exists) {
+  const root = skillsRoot(file)
+  return lines.flatMap(({ markdown }, index) =>
+    [...(markdown ?? "").matchAll(/(?<=^|[\s`(\["'])\/([a-z0-9-]+)(?![A-Za-z0-9_/-])/g)]
+      .filter(([, id]) => !CATALOG_SKILLS.has(id) && isSkill(root, id, exists))
+      .map(([token, id]) => ({ file, line: index + 1, rule: "slash-skill", text: `${token}, write @${id}` })),
+  )
+}
+
 function requiresFindings(file, text, exists) {
   if (!/\/poteto-mode\/playbooks\/[^/]+\.md$/.test(file)) return []
   const { data, body } = parseFrontmatter(text)
@@ -94,7 +103,7 @@ export function lint(files, exists = existsSync) {
         [...(line[scope] ?? "").matchAll(pattern)].map(([match]) => ({ file, line: index + 1, rule, text: match })),
       ),
     )
-    const markdown = isMarkdown(file) ? [...linkFindings(file, lines, exists), ...skillIdFindings(file, lines, exists)] : []
+    const markdown = isMarkdown(file) ? [...linkFindings(file, lines, exists), ...skillIdFindings(file, lines, exists), ...slashFindings(file, lines, exists)] : []
     return [...frontmatterFindings(file, text), ...requiresFindings(file, text, exists), ...matches, ...markdown]
   })
 }

@@ -7,8 +7,6 @@ import {
   MODE_KEY,
   MODELS_KEY,
   blockedBy,
-  commandDescription,
-  commandPrompt,
   entryOps,
   isSkillEvent,
   modeEntry,
@@ -46,7 +44,7 @@ export default {
     const readModels = () => modelsEntry(modelsFile, loadModels())
 
     const modeKey = (sessionID) => `mode/${sessionID}`
-    const commandedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
+    const requestedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
 
     const inOrder = () => {
       const queues = new Map()
@@ -63,7 +61,7 @@ export default {
     const sessionState = (sessionID) =>
       skillsInOrder(sessionID, async () => {
         const { loaded = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
-        return { mode: await commandedMode(sessionID), loaded }
+        return { mode: await requestedMode(sessionID), loaded }
       })
     const record = (sessionID, event) =>
       skillsInOrder(sessionID, async () => {
@@ -75,7 +73,7 @@ export default {
     const potetoMode = modeEntry(ROOT, skills)
     const synced = new Map()
     const reconcileNow = async (sessionID, agent) => {
-      const mode = agent === MODE_AGENT || (await commandedMode(sessionID))
+      const mode = agent === MODE_AGENT || (await requestedMode(sessionID))
       const want = { [MODELS_KEY]: readModels(), [MODE_KEY]: mode ? potetoMode : undefined }
       let have = synced.get(sessionID)
       if (!have) {
@@ -103,32 +101,8 @@ export default {
       }
     }
 
-    const shadowingPath = async (sessionID, skill) => {
-      const session = unwrap(await ctx.session.get({ sessionID }))
-      const directory = session?.location?.directory
-      const registered = unwrap(await ctx.skill.list(directory ? { location: { directory } } : undefined)) ?? []
-      const path = registered.find((entry) => entry.id === skill.id)?.path
-      return path && path !== skill.path ? path : undefined
-    }
-
     await ctx.skill.transform((editor) => {
       for (const skill of skills) editor.add(skill)
-    })
-
-    await ctx.command.transform((editor) => {
-      for (const skill of skills) {
-        if (skill.kind === "playbook" || skill.id.startsWith("principle-")) continue
-        editor.add({
-          name: skill.id,
-          description: commandDescription(skill.description),
-          execute: async ({ sessionID, prompt, delivery }) => {
-            if (skill.id === MODE_AGENT) await ctx.storage.set(modeKey(sessionID), true)
-            const { text, attach } = commandPrompt(skill, prompt.text ?? "", await shadowingPath(sessionID, skill))
-            const attached = attach ? [...(prompt.skills ?? []), { id: skill.id }] : prompt.skills
-            await ctx.session.prompt({ ...prompt, sessionID, delivery, text, ...(attached ? { skills: attached } : {}) })
-          },
-        })
-      }
     })
 
     await ctx.agent.transform((editor) => {
@@ -147,6 +121,7 @@ export default {
       "prompt",
       guarded("prompt", async (event) => {
         const session = unwrap(await ctx.session.get({ sessionID: event.sessionID }))
+        if (event.prompt.skills?.some((skill) => skill.id === MODE_AGENT)) await ctx.storage.set(modeKey(event.sessionID), true)
         await reconcile(event.sessionID, session?.agent)
         if (session?.agent !== MODE_AGENT) return
         const attachedKey = `attached/${event.sessionID}`
@@ -173,7 +148,7 @@ export default {
     const isPotetoSubagent = async (sessionID) => {
       const { subagents, root } = await ancestry(sessionID)
       if (subagents.length === 0) return false
-      return subagents.some((agent) => pstackAgents.has(agent)) || root.agent === MODE_AGENT || commandedMode(root.sessionID)
+      return subagents.some((agent) => pstackAgents.has(agent)) || root.agent === MODE_AGENT || requestedMode(root.sessionID)
     }
     const foreground = async (event) => {
       if (event.tool === "subagent" && (await isDelegate(event.sessionID))) event.input.background = false

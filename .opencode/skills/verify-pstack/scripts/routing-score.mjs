@@ -262,17 +262,17 @@ export const MATRIX_CASES = [
 export const MATRIX_ENTRIES = {
   agent: { runtime: "opencode", drive: { via: "start", agent: MODE_AGENT }, attaches: [MODE_AGENT] },
   build: { runtime: "opencode", drive: { via: "start", agent: "build" }, attaches: [] },
-  slash: { runtime: "opencode", drive: { via: "start", agent: "build", command: MODE_AGENT }, attaches: [MODE_AGENT] },
+  mention: { runtime: "opencode", drive: { via: "start", agent: "build", skill: MODE_AGENT }, attaches: [MODE_AGENT] },
   "cc-slash": { runtime: "claude", drive: { via: "claude", command: `pstack:${MODE_AGENT}` }, attaches: [MODE_AGENT] },
 }
-const MATRIX_GROUPS = { matrix: ["agent", "build"], "matrix@cc": ["cc-slash"], compare: ["agent", "slash", "cc-slash"] }
+const MATRIX_GROUPS = { matrix: ["agent", "build"], "matrix@cc": ["cc-slash"], compare: ["agent", "mention", "cc-slash"] }
 const DECIDE_MS = 4 * MINUTE
 
 const matrixChecks = (expect) => [...("playbook" in expect ? ["playbook"] : []), ...(expect.skills ? ["skills", ...(expect.skills.some((id) => RAN[id]) ? ["skills_ran"] : [])] : []), ...(expect.avoid ? ["avoids"] : []), ...(expect.stayOut ? ["stay_out"] : [])]
 
 export const scenarios = {
   "feature-agent": { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
-  "feature-slash": { role: "metric", runtime: "opencode", drive: { via: "command", command: "poteto-mode", agent: "build" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
+  "feature-mention": { role: "metric", runtime: "opencode", drive: { via: "mention", skill: "poteto-mode", agent: "build" }, prompt: FEATURE_PROMPT, timeoutMs: 60 * MINUTE, checks: FEATURE_CHECKS },
   investigate: { role: "metric", runtime: "opencode", drive: { via: "run", agent: "poteto-mode" }, prompt: INVESTIGATE_PROMPT, timeoutMs: 20 * MINUTE, checks: ["unslop_parent"] },
   "plain-build": { role: "gate", runtime: "opencode", drive: { via: "run", agent: "build" }, prompt: PLAIN_PROMPT, timeoutMs: 10 * MINUTE, checks: ["committed", "no_mode_entry", "no_hidden_skill"] },
   ...Object.fromEntries(

@@ -12,14 +12,14 @@ This folder is the maintained source for verifying what a pstack user sees in Op
 ## Driving conventions
 
 - `H=.opencode/skills/verify-pstack/scripts/harness.mjs`, run from the repo root.
-- Each recipe starts a fresh session unless it says to continue one. Carry the `session <sid>` that `run` and `command` print.
+- Each recipe starts a fresh session unless it says to continue one. Carry the `session <sid>` that `run` and `mention` print.
 - Prompts in recipes are literal. Keep them unchanged, because they tell the model not to do real work.
 - Never drive a server this run did not start.
-- A recipe that edits, delegates, or commits under `--agent poteto-mode` or `/poteto-mode` meets the [gates](./gates.md). Recipes outside the gates file run under `build` to stay clear of them.
+- A recipe that edits, delegates, or commits under `--agent poteto-mode` or an `@poteto-mode` mention meets the [gates](./gates.md). Recipes outside the gates file run under `build` to stay clear of them.
 
 ## Proof and skip reporting
 
-- A slash command proof is a `command-*.txt` showing the attached skill and the reply.
+- A mention proof is a `mention-*.txt` showing the attached skill and the reply.
 - A mode or role proof includes `entries-*.json` next to the transcript.
 - A delegate proof includes the child session from `$H children` and its `export`.
 - Record the feature ID with every artifact you cite.
@@ -36,8 +36,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 ## Features
 
-- [Slash commands](./slash-commands.md) covers `/<skill>` attaching its skill, principles and playbooks having no command, and the path fallback when a user skill shadows a pstack ID.
-- [poteto-mode agent](./poteto-mode-agent.md) covers the persistent mode, its instruction entry, switching away, and `/poteto-mode` keeping the mode on.
+- [poteto-mode agent](./poteto-mode-agent.md) covers the persistent mode, its instruction entry, switching away, and an `@poteto-mode` mention keeping the mode on.
 - [Model roles](./model-roles.md) covers `pstack-models.md` reaching every session, following edits and deletion, the code-delegate ladder, and the cross-family pool.
 - [Subagents](./subagents.md) covers `poteto-agent` loading poteto-mode by ID, `comment-sicko` reporting without editing, nested spawns, and delegates running their own subagents in the foreground.
 - [Gates](./gates.md) covers playbooks loading as skills, the `deslop` commit gate, and the hold on delegations and commits until a playbook's required skills load.

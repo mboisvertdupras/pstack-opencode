@@ -1,6 +1,6 @@
 # poteto-mode agent
 
-Selecting the `poteto-mode` agent keeps poteto mode on for the whole session, replacing Cursor's Custom Mode. The first message carries the `poteto-mode` skill, and a `pstack-mode` instruction entry stays on the session so the mode survives compaction. Switching an agent session to another agent removes the entry. Sending `/poteto-mode` turns the mode on too, and that session keeps the entry for the rest of its life, whatever agent runs it. A poteto-mode session also meets the [gates](./gates.md), which hold code changes until a playbook is loaded.
+Selecting the `poteto-mode` agent keeps poteto mode on for the whole session, replacing Cursor's Custom Mode. The first message carries the `poteto-mode` skill, and a `pstack-mode` instruction entry stays on the session so the mode survives compaction. Switching an agent session to another agent removes the entry. Mentioning `@poteto-mode` in a message turns the mode on too, and that session keeps the entry for the rest of its life, whatever agent runs it. A poteto-mode session also meets the [gates](./gates.md), which hold code changes until a playbook is loaded.
 
 ## Sub-features
 
@@ -9,14 +9,14 @@ Selecting the `poteto-mode` agent keeps poteto mode on for the whole session, re
 - `mode-entry` puts the `pstack-mode` instruction entry on the session. Its text starts `poteto mode is on. The user turned it on`.
 - `mode-playbook` makes the agent match a playbook from the skill.
 - `mode-off` removes the entry once an agent session runs under another agent.
-- `mode-other` gives sessions on other agents no entry and no skill, unless `/poteto-mode` ran in them.
-- `mode-slash` keeps the entry on a session where `/poteto-mode` ran, through later turns under `build`.
+- `mode-other` gives sessions on other agents no entry and no skill, unless `@poteto-mode` was mentioned in them.
+- `mode-mention` keeps the entry on a session where a message mentioned `@poteto-mode`, through later turns under `build`.
 
 ## How to get to it (user POV)
 
 - Press Tab in the TUI until `poteto-mode` is selected, then type a task.
 - Start with `opencode --agent poteto-mode`.
-- Type `/poteto-mode <task>` under any agent.
+- Type `@poteto-mode <task>` under any agent and pick the skill from the `@` list.
 
 ## Driving it with harness.mjs
 
@@ -29,13 +29,13 @@ Preconditions:
 - **Later message.** Run `$H run --agent poteto-mode --session <sid> "One word: are you still in poteto mode?"`. Then `$H export <sid>` shows `skills=[]` on the second `user` line.
 - **Switch away.** Run `$H run --agent build --session <sid> "Reply with only OK."`. Then `$H entries <sid>` no longer lists `pstack-mode`.
 - **Other agents.** Run `$H run "Reply with only OK."`. Then `$H entries <new sid>` lists no `pstack-mode` and `export` shows `skills=[]`.
-- **Slash command.** Run `$H command poteto-mode --agent build "Reply with only OK."`. Then `$H entries <sid>` lists `pstack-mode`, though the session runs `build`.
-- **Slash persists.** Run `$H run --agent build --session <that sid> "Reply with only OK."`. `$H entries <sid>` still lists `pstack-mode`, and `export` shows `skills=[]` on the second `user` line.
+- **Mention.** Run `$H mention poteto-mode --agent build "Reply with only OK."`. Then `$H entries <sid>` lists `pstack-mode`, though the session runs `build`.
+- **Mention persists.** Run `$H run --agent build --session <that sid> "Reply with only OK."`. `$H entries <sid>` still lists `pstack-mode`, and `export` shows `skills=[]` on the second `user` line.
 
 ## Gotchas
 
 - The reply alone does not prove the mode. The model can find the playbook by reading files. Cite the `skills` field and the entry.
 - `pstack-models` also appears in `entries` once a recipe writes the model file. It is unrelated to the mode.
 - The skill is attached once per session, tracked in plugin storage. A second run on a fresh session attaches it again.
-- The `/poteto-mode` record also lives in plugin storage, so it survives a plugin restart. Use a fresh session to test `mode-other`.
+- The `@poteto-mode` record also lives in plugin storage, so it survives a plugin restart. Use a fresh session to test `mode-other`.
 - The first-message prompt says not to do the task, so it never meets the gates. A prompt that commits in a poteto-mode session, or delegates to `poteto-agent` after a playbook with `requires` loads, is held. See [gates](./gates.md).

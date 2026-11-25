@@ -32,8 +32,8 @@ const { values: options } = parseArgs({
 
 const drives = {
   run: ({ agent }, model, prompt) => ["run", "--agent", agent, "--model", model, prompt],
-  command: ({ command, agent }, model, prompt) => ["command", command, "--agent", agent, "--model", model, prompt],
-  start: ({ agent, command }, model, prompt) => ["start", ...(command ? ["--command", command] : []), "--agent", agent, "--model", model, prompt],
+  mention: ({ skill, agent }, model, prompt) => ["mention", skill, "--agent", agent, "--model", model, prompt],
+  start: ({ agent, skill }, model, prompt) => ["start", ...(skill ? ["--skill", skill] : []), "--agent", agent, "--model", model, prompt],
 }
 
 function harness(args, env) {

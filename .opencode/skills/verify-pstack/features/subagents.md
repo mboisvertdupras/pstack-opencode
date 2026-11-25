@@ -1,6 +1,6 @@
 # Subagents
 
-pstack ships two subagents. `poteto-agent` is the delegate that poteto-mode spawns for playbook steps. It reads the `poteto-mode` skill from the path its brief gives, and with no path it loads the skill by ID even though the skill is hidden from its catalog. It loads `deslop` before every commit, and the commit gate in the [gates](./gates.md) file holds its commits until it does. `comment-sicko` reviews comments in a scope and reports, without editing code. Inside a child session running a pstack agent, the plugin sets `background: false` on every `subagent` call, so the child's turn and its report wait for its own children. The plugin also rejects a `shell` call with `background: true` in every subagent of a poteto-mode session, meaning every session with a pstack agent above it or under a root that runs poteto-mode as its agent or through `/poteto-mode`, because the job's completion notice would reach the subagent only after its parent took its first turn end as the report. Root sessions, and subagents of a root that runs neither poteto-mode nor a pstack agent above them, keep the `background` they asked for.
+pstack ships two subagents. `poteto-agent` is the delegate that poteto-mode spawns for playbook steps. It reads the `poteto-mode` skill from the path its brief gives, and with no path it loads the skill by ID even though the skill is hidden from its catalog. It loads `deslop` before every commit, and the commit gate in the [gates](./gates.md) file holds its commits until it does. `comment-sicko` reviews comments in a scope and reports, without editing code. Inside a child session running a pstack agent, the plugin sets `background: false` on every `subagent` call, so the child's turn and its report wait for its own children. The plugin also rejects a `shell` call with `background: true` in every subagent of a poteto-mode session, meaning every session with a pstack agent above it or under a root that runs poteto-mode as its agent or through an `@poteto-mode` mention, because the job's completion notice would reach the subagent only after its parent took its first turn end as the report. Root sessions, and subagents of a root that runs neither poteto-mode nor a pstack agent above them, keep the `background` they asked for.
 
 ## Sub-features
 
@@ -12,7 +12,7 @@ pstack ships two subagents. `poteto-agent` is the delegate that poteto-mode spaw
 
 ## How to get to it (user POV)
 
-- Run `/poteto-mode` on a task whose playbook delegates work.
+- Mention `@poteto-mode` on a task whose playbook delegates work.
 - Run `/no-comments`, which spawns `comment-sicko`.
 - Ask for either agent by name.
 

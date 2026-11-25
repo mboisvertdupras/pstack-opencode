@@ -1,6 +1,6 @@
 # Model roles
 
-`/setup-pstack` writes per-role model choices to `pstack-models.md` in the OpenCode config folder. The plugin keeps that file in every session as the `pstack-models` instruction entry, so pstack skills pick each role's model from it. An edit shows up at the next request, and deleting the file removes the entry.
+The `setup-pstack` skill writes per-role model choices to `pstack-models.md` in the OpenCode config folder. The plugin keeps that file in every session as the `pstack-models` instruction entry, so pstack skills pick each role's model from it. An edit shows up at the next request, and deleting the file removes the entry.
 
 ## Sub-features
 
@@ -13,7 +13,7 @@
 
 ## How to get to it (user POV)
 
-- Run `/setup-pstack` and accept a configuration.
+- Mention `@setup-pstack` and accept a configuration.
 - Edit `pstack-models.md` by hand in the OpenCode config folder the plugin reads: `$XDG_CONFIG_HOME/opencode` when that is set, else `~/.config/opencode`.
 
 ## Driving it with harness.mjs

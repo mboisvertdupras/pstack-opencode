@@ -1,6 +1,6 @@
 # pstack for OpenCode
 
-pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 64 skills in `src/skills` include the `principle-*` skills that the playbooks cite, and `/thermos`, which runs two harsh branch reviews in parallel. The five agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, the `comment-sicko` comment reviewer, and the two thermo-nuclear reviewers that `/thermos` spawns.
+pstack is a set of engineering skills for OpenCode, a mode that runs them, and agents it delegates to. The `poteto-mode` skill holds the playbooks for bug fixes, features, refactors, perf work, investigations, and PRs. It routes each step to the skill that does it, such as `why` to trace a decision, `interrogate` for adversarial review, and `deslop` before a commit. The 64 skills in `src/skills` include the `principle-*` skills that the playbooks cite, and `@thermos`, which runs two harsh branch reviews in parallel. The five agents in `src/agents` are the `poteto-mode` primary agent, the `poteto-agent` delegate, the `comment-sicko` comment reviewer, and the two thermo-nuclear reviewers that `@thermos` spawns.
 
 pstack was ported from poteto's [pstack in cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack), which is MIT licensed, and that license still ships.
 
@@ -14,7 +14,7 @@ Add the package to `plugins` in `~/.config/opencode/opencode.jsonc`.
 }
 ```
 
-The plugin registers the skills, their slash commands, and the five agents. A file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
+The plugin registers the skills and the five agents. A file in `agents/` named after a pstack agent, such as `poteto-mode.md`, overrides the fields it sets, and pstack's definition fills in the rest.
 
 To run pstack from a checkout of this repo instead, use the installer. It links `src/` and copies nothing.
 
@@ -40,27 +40,27 @@ pstack needs two settings under `experimental` in `opencode.jsonc`. The installe
 }
 ```
 
-`todo` gives agents `todowrite`, which every playbook uses for its todo list. `subagent_depth` lets a delegate run a skill that spawns its own subagents, such as a delegate running `/no-comments`, which spawns `comment-sicko`.
+`todo` gives agents `todowrite`, which every playbook uses for its todo list. `subagent_depth` lets a delegate run a skill that spawns its own subagents, such as a delegate running `@no-comments`, which spawns `comment-sicko`.
 
-Then run `/setup-pstack` once. It finds the models you have and writes a model per role to `~/.config/opencode/pstack-models.md`. Out of the box, code delegates (feature, refactoring, bug fix, perf, hillclimb), prose, and judgment run on Opus 5.5 at xhigh, and no role runs above xhigh. Outside a review panel, Fable 5.2 runs only when you name it, on a role line or for the task, or after two Opus 5.5 runs of the same brief fail. The default panel is Fable 5.2, Opus 5.5, and Gemini 4 Neon.
+Then run `@setup-pstack` once. It finds the models you have and writes a model per role to `~/.config/opencode/pstack-models.md`. Out of the box, code delegates (feature, refactoring, bug fix, perf, hillclimb), prose, and judgment run on Opus 5.5 at xhigh, and no role runs above xhigh. Outside a review panel, Fable 5.2 runs only when you name it, on a role line or for the task, or after two Opus 5.5 runs of the same brief fail. The default panel is Fable 5.2, Opus 5.5, and Gemini 4 Neon.
 
 ## Use pstack
 
-To work in the mode for one message, start with `/poteto-mode <task>`. The other skills run as its steps need them.
+To work in the mode, start with `@poteto-mode <task>`. It stays on for the rest of the session. The other skills run as its steps need them.
 
-To keep the mode on for a whole session, press Tab to the `poteto-mode` agent, or start with `opencode --agent poteto-mode`. Both work with the package and with the installer.
+To keep the mode on from the first message without mentioning it, press Tab to the `poteto-mode` agent, or start with `opencode --agent poteto-mode`. Both work with the package and with the installer.
 
-Every skill except the `principle-*` skills has a slash command of the same name, such as `/how`, `/why`, `/interrogate`, and `/deslop`.
+Start any skill by mentioning it as `@<id>` in the TUI. Typing `@` lists every skill, including the hidden ones, so `@how`, `@why`, `@interrogate`, `@deslop`, and the playbooks and `principle-*` skills all attach to your message.
 
 For a long run you leave alone, give OpenCode's `/goal` a check that can pass or fail, such as `/goal npm test passes`.
 
-A user skill with the same ID as a pstack skill keeps that ID in OpenCode. pstack still reads its own copy by path, and its slash command of that name does too. The installer lists any such skills it finds.
+A user skill with the same ID as a pstack skill keeps that ID in OpenCode. `@<id>` loads your copy, not pstack's. pstack's own skills and playbooks still read pstack's file by path. The installer lists any such skills it finds.
 
 ## Layout
 
 ```text
 src/                     The plugin, published as the pstack-opencode package. The installer links this folder.
-src/plugin/              Registers the skills, commands, and agents. lib.js is pure, index.js talks to OpenCode.
+src/plugin/              Registers the skills and agents. lib.js is pure, index.js talks to OpenCode.
 src/skills/              One folder per skill, each with a SKILL.md
 src/agents/              poteto-mode, poteto-agent, comment-sicko, and the two thermo-nuclear reviewers
 src/LICENSE*             The pstack, cursor-team-kit, and Thermos MIT notices
@@ -80,12 +80,12 @@ test/                    Plugin, installer, and lint tests. skills.test.mjs lint
 	npm run lint
 	```
 
-3. Verify the change in a real server with the `verify-pstack` skill in this repo. Its harness starts a private OpenCode server with `src/` installed, drives commands and agents, and saves evidence.
+3. Verify the change in a real server with the `verify-pstack` skill in this repo. Its harness starts a private OpenCode server with `src/` installed, drives skills and agents, and saves evidence.
 
 	```sh
 	H=.opencode/skills/verify-pstack/scripts/harness.mjs
 	$H up && $H doctor
-	$H command how "how does math.js work?"
+	$H mention how "how does math.js work?"
 	$H down
 	```
 
