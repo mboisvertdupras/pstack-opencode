@@ -161,6 +161,12 @@ function saveTree(state, sessionID) {
   return { tree, busy, file: save(state, `tree-${sessionID}.json`, tree) }
 }
 
+// The TUI attaches a skill with the text and a mention range, so a session that must start in a skill sends the same shape.
+function promptWithMention(state, sessionID, id, text) {
+  const mention = { start: 0, end: id.length + 1, text: `@${id}` }
+  api(state, ["session.prompt", "--param", `sessionID=${sessionID}`, "--data", JSON.stringify({ text: `@${id} ${text}`, skills: [{ id, mention }] })])
+}
+
 const commands = {
   async up() {
     mkdirSync(BASE, { recursive: true })
@@ -247,10 +253,6 @@ const commands = {
       const modes = Object.fromEntries(agents.map((agent) => [agent.id, agent.mode]))
       const bundled = readAgents(join(SRC, "agents"))
       check(bundled.every((agent) => modes[agent.id] === agent.mode), `agents ${bundled.map((agent) => `${agent.id}=${modes[agent.id]}`).join(" ")}`)
-      const names = new Set(api(state, ["GET", `/api/command?${locationQuery(state)}`]).map((command) => command.name))
-      const expected = srcSkills().filter((name) => !name.startsWith("principle-"))
-      const missing = expected.filter((name) => !names.has(name))
-      check(missing.length === 0, `${expected.length - missing.length} of ${expected.length} pstack commands registered${missing.length ? `, missing ${missing.join(", ")}` : ""}`)
     }
     console.log(checks.join("\n"))
     if (checks.some((line) => line.startsWith("FAIL"))) process.exit(1)
@@ -272,18 +274,18 @@ const commands = {
     if (result.status !== 0) process.exit(result.status ?? 1)
   },
 
-  async command(args) {
+  async mention(args) {
     const state = loadState()
     const agent = flagValue(args, "--agent", "build")
     const model = flagValue(args, "--model", MODEL)
-    const [name, ...words] = args
-    if (!name) die("usage: harness.mjs command <name> [--agent id] [--model provider/model#variant] <text...>")
-    const session = createSession(state, `verify /${name}`, agent, model)
-    api(state, ["session.command", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ name, text: words.join(" ") })])
+    const [id, ...words] = args
+    if (!id) die("usage: harness.mjs mention <skill-id> [--agent id] [--model provider/model#variant] <text...>")
+    const session = createSession(state, `verify @${id}`, agent, model)
+    promptWithMention(state, session.id, id, words.join(" "))
     const idle = await waitIdle(state, session.id, Date.now() + TIMEOUT)
     const summary = summarize(exportSession(state, session.id))
-    save(state, `command-${name}-${session.id}.txt`, `/${name} ${words.join(" ")}\nagent ${agent} model ${model}\n${idle ? "" : `timeout after ${TIMEOUT}ms\n`}\n${summary}\n`)
-    console.log(`session ${session.id}\n${summary}\nproof   ${evidencePath(state, `command-${name}-${session.id}.txt`)}`)
+    save(state, `mention-${id}-${session.id}.txt`, `@${id} ${words.join(" ")}\nagent ${agent} model ${model}\n${idle ? "" : `timeout after ${TIMEOUT}ms\n`}\n${summary}\n`)
+    console.log(`session ${session.id}\n${summary}\nproof   ${evidencePath(state, `mention-${id}-${session.id}.txt`)}`)
     if (!idle) process.exit(TIMED_OUT)
   },
 
@@ -300,13 +302,13 @@ const commands = {
     const state = loadState()
     const agent = flagValue(args, "--agent", "build")
     const model = flagValue(args, "--model", MODEL)
-    const command = flagValue(args, "--command")
+    const skill = flagValue(args, "--skill")
     const text = args.join(" ")
-    if (!text) die("usage: harness.mjs start [--command name] [--agent id] [--model provider/model#variant] <prompt...>")
-    const session = createSession(state, command ? `verify /${command}` : "verify start", agent, model)
-    if (command) api(state, ["session.command", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ name: command, text })])
+    if (!text) die("usage: harness.mjs start [--skill id] [--agent id] [--model provider/model#variant] <prompt...>")
+    const session = createSession(state, skill ? `verify @${skill}` : "verify start", agent, model)
+    if (skill) promptWithMention(state, session.id, skill, text)
     else api(state, ["session.prompt", "--param", `sessionID=${session.id}`, "--data", JSON.stringify({ text })])
-    const file = save(state, `start-${session.id}.txt`, `agent ${agent} model ${model}${command ? ` command /${command}` : ""}\n\n${text}\n`)
+    const file = save(state, `start-${session.id}.txt`, `agent ${agent} model ${model}${skill ? ` skill @${skill}` : ""}\n\n${text}\n`)
     console.log(`session ${session.id}\nproof   ${file}`)
   },
 
@@ -417,7 +419,7 @@ const commands = {
 
 const [name, ...args] = process.argv.slice(2)
 if (!commands[name]) {
-  console.log("usage: harness.mjs up | doctor | run <opencode run args> | command <name> [--agent a] [--model m] <text> | start [--command name] [--agent a] [--model m] <prompt> | snapshot <sid> | stop <sid> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
+  console.log("usage: harness.mjs up | doctor | run <opencode run args> | mention <skill-id> [--agent a] [--model m] <text> | start [--skill id] [--agent a] [--model m] <prompt> | snapshot <sid> | stop <sid> | export <sid> | tree <sid> | entries <sid> | children <sid> | skill <id> | env | down")
   process.exit(name ? 1 : 0)
 }
 await commands[name](args)
