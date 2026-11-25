@@ -440,10 +440,11 @@ test("a build session commits freely", async () => {
   await state.hooks["execute.before"](shell("s1", "build", "git add -A && git commit -m a"))
 })
 
+const mention = (id) => ({ id, mention: { start: 0, end: id.length + 1, text: `@${id}` } })
 const potetoMode = (state, sessionID) =>
-  state.commands.find((command) => command.name === "poteto-mode").execute({ sessionID, prompt: { text: "fix it" }, delivery: "steer" })
+  state.hooks.prompt({ sessionID, prompt: { text: "@poteto-mode fix it", skills: [mention("poteto-mode")] } })
 
-test("/poteto-mode gates commits in its build session", async () => {
+test("@poteto-mode gates commits in its build session", async () => {
   const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } } })
   await plugin.setup(ctx)
   await potetoMode(state, "s1")
@@ -451,12 +452,11 @@ test("/poteto-mode gates commits in its build session", async () => {
   await state.hooks["execute.before"](shell("s2", "build", "git commit -m a"))
 })
 
-test("/poteto-mode keeps its build session in poteto mode, and other build sessions stay plain", async () => {
+test("@poteto-mode keeps its build session in poteto mode, and other build sessions stay plain", async () => {
   const sessions = { s1: { agent: "build" }, s2: { agent: "build" } }
   const { ctx, state } = fakeContext({ sessions })
   await plugin.setup(ctx)
   await potetoMode(state, "s1")
-  await state.hooks.prompt({ sessionID: "s1", prompt: state.prompts[0] })
   await state.hooks.prompt({ sessionID: "s2", prompt: { text: "hi" } })
   assert.match(state.entries.s1["pstack-mode"], /poteto mode is on/)
   assert.equal(state.entries.s2?.["pstack-mode"], undefined)
@@ -465,7 +465,7 @@ test("/poteto-mode keeps its build session in poteto mode, and other build sessi
   assert.match(state.entries.s1["pstack-mode"], /poteto mode is on/)
 })
 
-test("a /poteto-mode session stays in poteto mode after the plugin restarts", async () => {
+test("an @poteto-mode session stays in poteto mode after the plugin restarts", async () => {
   const sessions = { s1: { agent: "build" } }
   const first = fakeContext({ sessions })
   await plugin.setup(first.ctx)
@@ -476,6 +476,14 @@ test("a /poteto-mode session stays in poteto mode after the plugin restarts", as
   await state.hooks.context({ sessionID: "s1", agent: "build" })
   assert.match(state.entries.s1["pstack-mode"], /poteto mode is on/)
   await assert.rejects(async () => state.hooks["execute.before"](shell("s1", "build", "git commit -m a")))
+})
+
+test("mentioning a skill other than poteto-mode leaves the session plain", async () => {
+  const { ctx, state } = fakeContext({ sessions: { s1: { agent: "build" } } })
+  await plugin.setup(ctx)
+  await state.hooks.prompt({ sessionID: "s1", prompt: { text: "@how why", skills: [mention("how")] } })
+  assert.equal(state.entries.s1?.["pstack-mode"], undefined)
+  assert.equal(state.storage["mode/s1"], undefined)
 })
 
 test("a plugin bug in the tool hooks never blocks a tool call", async () => {

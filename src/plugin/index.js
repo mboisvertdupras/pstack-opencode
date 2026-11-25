@@ -46,7 +46,7 @@ export default {
     const readModels = () => modelsEntry(modelsFile, loadModels())
 
     const modeKey = (sessionID) => `mode/${sessionID}`
-    const commandedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
+    const requestedMode = async (sessionID) => Boolean(await ctx.storage.get(modeKey(sessionID)))
 
     const inOrder = () => {
       const queues = new Map()
@@ -63,7 +63,7 @@ export default {
     const sessionState = (sessionID) =>
       skillsInOrder(sessionID, async () => {
         const { loaded = [] } = (await ctx.storage.get(skillsKey(sessionID))) ?? {}
-        return { mode: await commandedMode(sessionID), loaded }
+        return { mode: await requestedMode(sessionID), loaded }
       })
     const record = (sessionID, event) =>
       skillsInOrder(sessionID, async () => {
@@ -75,7 +75,7 @@ export default {
     const potetoMode = modeEntry(ROOT, skills)
     const synced = new Map()
     const reconcileNow = async (sessionID, agent) => {
-      const mode = agent === MODE_AGENT || (await commandedMode(sessionID))
+      const mode = agent === MODE_AGENT || (await requestedMode(sessionID))
       const want = { [MODELS_KEY]: readModels(), [MODE_KEY]: mode ? potetoMode : undefined }
       let have = synced.get(sessionID)
       if (!have) {
@@ -147,6 +147,7 @@ export default {
       "prompt",
       guarded("prompt", async (event) => {
         const session = unwrap(await ctx.session.get({ sessionID: event.sessionID }))
+        if (event.prompt.skills?.some((skill) => skill.id === MODE_AGENT)) await ctx.storage.set(modeKey(event.sessionID), true)
         await reconcile(event.sessionID, session?.agent)
         if (session?.agent !== MODE_AGENT) return
         const attachedKey = `attached/${event.sessionID}`
@@ -173,7 +174,7 @@ export default {
     const isPotetoSubagent = async (sessionID) => {
       const { subagents, root } = await ancestry(sessionID)
       if (subagents.length === 0) return false
-      return subagents.some((agent) => pstackAgents.has(agent)) || root.agent === MODE_AGENT || commandedMode(root.sessionID)
+      return subagents.some((agent) => pstackAgents.has(agent)) || root.agent === MODE_AGENT || requestedMode(root.sessionID)
     }
     const foreground = async (event) => {
       if (event.tool === "subagent" && (await isDelegate(event.sessionID))) event.input.background = false
