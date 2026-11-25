@@ -85,7 +85,7 @@ const shadows = roots.flatMap((root) =>
 if (shadows.length > 0) {
   console.log("\nThese user skills share an ID with a pstack skill, and they keep it.")
   for (const path of shadows) console.log(`  ${path}`)
-  console.log("pstack still runs its own copy. Its skills read pstack's file by path, and its slash command of that name does too.")
+  console.log("`@<id>` loads your copy. pstack's own skills still read pstack's file by path.")
 }
 
 const configs = ["opencode.jsonc", "opencode.json"].map((name) => join(target, name)).filter(existsSync)
@@ -98,5 +98,5 @@ if (missing.length > 0) {
   console.log(`\nRecommended. Add these to "experimental" in ${configs[0] ?? join(target, "opencode.jsonc")}:`)
   for (const [, line, why] of missing) console.log(`  ${line}   ${why}`)
 }
-if (!existsSync(join(configDir, "pstack-models.md"))) console.log("\nNext, run /setup-pstack once to choose a model per role.")
-console.log(`\nDone. Start a task with /poteto-mode, or press Tab to the poteto-mode agent to keep the mode on.${dryRun ? " (dry run, nothing changed)" : ""}`)
+if (!existsSync(join(configDir, "pstack-models.md"))) console.log("\nNext, run @setup-pstack once to choose a model per role.")
+console.log(`\nDone. Start a task with @poteto-mode, or press Tab to the poteto-mode agent to keep the mode on.${dryRun ? " (dry run, nothing changed)" : ""}`)

@@ -190,7 +190,7 @@ const NOT_A_ROLE =
 export function modelsEntry(file, text) {
   if (!text) return undefined
   const header = [
-    `pstack per-role model choices, written by /setup-pstack to \`${file}\`. Each role line overrides that role's default model in pstack skills.`,
+    `pstack per-role model choices, written by the \`setup-pstack\` skill to \`${file}\`. Each role line overrides that role's default model in pstack skills.`,
     ...(noCodeModels(text).size > 0 ? [NOT_A_ROLE] : []),
   ].join(" ")
   return `${header}\n\n${text}`
