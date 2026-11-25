@@ -97,3 +97,9 @@ test("a SKILL.md names its folder and has a description", () => {
   assert.deepEqual(found("# How\n"), [])
   assert.deepEqual(found("---\nname: other\n---\n", "src/skills/how/references/notes.md"), [])
 })
+
+test("a slash before a pstack skill ID is a finding, a path or another command is not", () => {
+  const exists = (path) => path.endsWith("/tdd/SKILL.md")
+  assert.deepEqual(found("Run `/tdd` first, or see [/tdd](../tdd/SKILL.md).", SKILL, exists), ["slash-skill /tdd, write @tdd", "slash-skill /tdd, write @tdd"])
+  assert.deepEqual(found("Write to /tmp/arena-x/ and /tdd/notes, then give `/goal` a check.", SKILL, exists), [])
+})
