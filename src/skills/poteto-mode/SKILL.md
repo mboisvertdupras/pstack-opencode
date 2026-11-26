@@ -41,7 +41,7 @@ Load the leaf skill for any principle you apply. Each entry names when it applie
 - **Outcome-Oriented Execution.** Planned rewrites and migrations with explicit phase boundaries. Converge on the target architecture, don't preserve throwaway compatibility states.
 - **Experience First.** Product, UX, or feature-scope tradeoffs. Choose user delight over implementation convenience.
 - **Exhaust the Design Space.** A novel interaction or architectural decision with no precedent. Build 2-3 competing prototypes and compare before committing.
-- **Build the Lever.** Any non-trivial work. Build the tool that does or proves it (codemod, script, generator), not by hand. The tool is the artifact a reviewer reruns.
+- **Build the Lever.** Bulk or mechanical work, where many similar edits or files would otherwise be done by hand. Build a throwaway script or codemod in scratch instead.
 
 **Architecture**
 
